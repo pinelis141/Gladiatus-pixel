@@ -178,7 +178,7 @@ class _BattleScreenState extends State<BattleScreen> {
                   child:Text('#${item.turn}  ${item.narration}',
                     style:const TextStyle(fontSize:11)))).toList())),
           ]),
-        ))),
+        )),
       ),
     );
   }
