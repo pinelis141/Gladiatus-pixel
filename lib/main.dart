@@ -100,9 +100,13 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> loadGame() async {
+    SharedPreferences? recoveryPrefs;
+    String? originalRaw;
     try {
       final prefs = await SharedPreferences.getInstance();
+      recoveryPrefs = prefs;
       final raw = prefs.getString(saveKey);
+      originalRaw = raw;
       if (raw == null) {
         newGame();
       } else {
@@ -153,12 +157,22 @@ class _GameScreenState extends State<GameScreen> {
         }
       }
     } catch (_) {
-      // Preserve the original record for later recovery; don't silently
-      // overwrite it here. Notify the player before they take an action.
+      // Keep a recoverable copy before the next save replaces damaged data.
+      var backedUp = false;
+      if (originalRaw != null && recoveryPrefs != null) {
+        try {
+          backedUp = await recoveryPrefs.setString(
+              '${saveKey}_corrupt_backup', originalRaw);
+        } catch (_) {
+          backedUp = false;
+        }
+      }
       newGame();
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) notice('Save inválido. Jogo provisório iniciado; o arquivo antigo ainda está guardado.');
+          if (mounted) notice(backedUp
+              ? 'Save inválido: uma cópia foi preservada para recuperação.'
+              : 'Falha ao carregar o save: não foi possível fazer backup.');
         });
       }
     }
