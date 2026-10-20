@@ -579,7 +579,7 @@ class _GameScreenState extends State<GameScreen> {
             Sprite(
               region.key=='Campânia'?'scene_forest':
               region.key=='Porto de Óstia'?'scene_port':'scene_ruins',
-              width:double.infinity,height:110),
+              width:300,height:110),
           ])),
           ...expeditions.where((e)=>e.region==region.key).map(opponent),
         ])),
