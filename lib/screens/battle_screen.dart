@@ -94,7 +94,7 @@ class _BattleScreenState extends State<BattleScreen> {
     retreatDialogOpen = false;
     if (confirmed == true && mounted) {
       Navigator.of(context).pop(BattleOutcome(
-        opponentId: widget.enemy.id, won: false,
+        opponentId: widget.enemy.id, won: false, retreated: true,
         remainingHealth: engine.playerHealth,
         turns: engine.round, damageDealt: engine.totalDealt,
         damageTaken: engine.totalTaken,
