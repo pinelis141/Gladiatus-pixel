@@ -280,6 +280,9 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void rest() {
+    if(health>=maxHealth&&energy>=10){
+      notice('Você já está totalmente recuperado.');return;
+    }
     // Emergency recovery prevents softlocks, but free resting while healthy
     // would make combat and the economy consequence-free.
     if (gold < 15 && health > 0 && energy > 0) {
@@ -770,7 +773,7 @@ class _GameScreenState extends State<GameScreen> {
           'enfrente novos desafios. Cada combate gasta 1 energia.'),
         const SizedBox(height:8),
         FilledButton.icon(onPressed:()=>fight(expeditions.first),
-          icon:const Icon(Icons.swords),label:const Text('ENFRENTAR O LOBO')),
+          icon:const Icon(Icons.shield),label:const Text('ENFRENTAR O LOBO')),
       ])),
       restPanel(),
       contractsPanel(),
@@ -926,9 +929,15 @@ class _GameScreenState extends State<GameScreen> {
           fontWeight: FontWeight.bold)),
       actions: [
         IconButton(
-          tooltip: 'Salvar jogo',
+          tooltip: 'Salvar jogo · $saveStatus',
           onPressed: () => unawaited(saveGame()),
-          icon: const Icon(Icons.save_outlined)),
+          icon:Icon(saveStatus=='Salvo'?Icons.cloud_done_outlined:
+            saveStatus=='Salvando'?Icons.sync:
+            Icons.error_outline)),
+        IconButton(
+          tooltip:'Preferências e acessibilidade',
+          onPressed:showPreferences,
+          icon:const Icon(Icons.settings_outlined)),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(32),
@@ -953,6 +962,7 @@ class _GameScreenState extends State<GameScreen> {
         ]),
     bottomNavigationBar: NavigationBar(
       height: 72,
+      labelBehavior:NavigationDestinationLabelBehavior.onlyShowSelected,
       backgroundColor: Palette.panel,
       selectedIndex: page,
       onDestinationSelected: (next) {
