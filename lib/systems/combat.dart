@@ -36,13 +36,14 @@ class BattleTurn {
 class BattleOutcome {
   final String opponentId;
   final bool won;
+  final bool retreated;
   final int remainingHealth;
   final int turns;
   final int damageDealt;
   final int damageTaken;
   const BattleOutcome({
     required this.opponentId, required this.won,
-    required this.remainingHealth, required this.turns,
+    this.retreated = false, required this.remainingHealth, required this.turns,
     required this.damageDealt, required this.damageTaken,
   });
 }
@@ -128,7 +129,7 @@ class BattleEngine {
         if (move == CombatMove.feint) base = (base * .68).round();
         if (crit) base = (base * 1.5).round();
         base += combo * 2;
-        dealt = max(1, base - (enemy.tier + rivalRank) ~/ 2);
+        dealt = max(1, base - (enemy.tier + min(10, max(0, rivalRank))) ~/ 2);
         enemyHealth = max(0, enemyHealth - dealt);
         totalDealt += dealt;
         notes.add(crit ? 'Golpe crítico! -$dealt HP.' : 'Você causa $dealt de dano.');
