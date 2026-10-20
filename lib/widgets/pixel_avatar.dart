@@ -26,10 +26,17 @@ class HeroAvatar extends StatelessWidget {
     this.width=176,this.height=198});
   @override
   Widget build(BuildContext context) {
-    final frames=<String>['gladiator_base_hd'];
-    for(final slot in [Slot.boots,Slot.gloves,Slot.armor,
-      Slot.helmet,Slot.weapon,Slot.shield]) {
-      if(equipment.containsKey(slot)) frames.add('equip_${slot.name}_hd');
+    // Switch to the coherent complete illustration only when every visible
+    // equipment slot is worn; otherwise composite individually aligned layers.
+    const visibleSlots=[Slot.boots,Slot.gloves,Slot.armor,
+      Slot.helmet,Slot.weapon,Slot.shield];
+    final complete=visibleSlots.every(equipment.containsKey);
+    final frames=<String>[complete
+      ?'gladiator_equipped_hd':'gladiator_base_hd'];
+    if(!complete) {
+      for(final slot in visibleSlots) {
+        if(equipment.containsKey(slot))frames.add('equip_${slot.name}_hd');
+      }
     }
     final rarity=equipment.values.fold<int>(0,
       (value,gear)=>gear.rarity.index>value?gear.rarity.index:value);
