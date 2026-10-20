@@ -100,6 +100,7 @@ jobs:
       - name: Preparar Android
         run: |
           flutter create --platforms=android --org com.roma.gladiatus --project-name gladiatus_pixel .
+          python tools/select_android_ndk.py
           flutter pub get
       - name: Gerar release apos auditoria
         run: flutter build apk --release --no-tree-shake-icons
