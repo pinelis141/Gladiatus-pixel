@@ -15,10 +15,10 @@ void main(){
         await tester.pumpWidget(const GladiatusApp());
         await tester.pumpAndSettle();
         expect(tester.takeException(),isNull);
-        await tester.tap(find.text('Missões'));
+        await tester.tap(find.byIcon(Icons.map));
         await tester.pumpAndSettle();
         expect(tester.takeException(),isNull);
-        await tester.tap(find.text('Comércio'));
+        await tester.tap(find.byIcon(Icons.storefront));
         await tester.pumpAndSettle();
         expect(tester.takeException(),isNull);
     });
