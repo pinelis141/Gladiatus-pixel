@@ -31,8 +31,8 @@ void main(){
     await tester.pumpAndSettle();
     await tester.tap(find.text('Missões'));
     await tester.pumpAndSettle();
-    expect(find.text('Contratos diários'),findsOneWidget);
-    expect(find.text('Taverna'),findsOneWidget);
+    expect(find.text('CONTRATOS DIÁRIOS'),findsOneWidget);
+    expect(find.text('TAVERNA'),findsOneWidget);
   });
 
   testWidgets('Item filtering and forge remain accessible',(tester) async{
@@ -47,6 +47,6 @@ void main(){
     expect(find.text('FERREIRO'),findsOneWidget);
     await tester.tap(find.text('FERREIRO'));
     await tester.pumpAndSettle();
-    expect(find.text('Oficina do ferreiro'),findsOneWidget);
+    expect(find.text('OFICINA DO FERREIRO'),findsOneWidget);
   });
 }
