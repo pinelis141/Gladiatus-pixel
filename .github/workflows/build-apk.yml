@@ -1,30 +1,27 @@
-name: Build Gladiatus APK
+name: Audit Before APK
 
 on:
   push:
-    branches: [main, master, audit/quality-balance-ux-v13]
+    branches: [main, feature/optimization-unified-v2]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build-android:
-    name: Gerar sprites, validar e compilar APK
+  audit:
+    name: Auditoria obrigatoria antes do APK
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout do repositório
-        uses: actions/checkout@v4
-
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Instalar Pillow e gerar sprites PNG
+      - name: Gerar assets, verificar sprite e som
         run: |
-          python -m pip install --upgrade pip Pillow
+          python -m pip install Pillow
           python tools/generate_sprites.py
           python tools/generate_hd_sprites.py
           python tools/extract_hero_art.py
@@ -33,59 +30,85 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from PIL import Image
-          files = sorted(Path('assets/sprites').glob('*.png'))
-          assert len(files) == 33, f'Sprites encontrados: {len(files)}'
-          for path in files:
-              with Image.open(path) as im:
-                  im.verify()
-          print(f'{len(files)} sprites PNG validados.')
           from wave import open as wave_open
-          sounds = sorted(Path('assets/audio').glob('*.wav'))
-          assert len(sounds) == 3
-          for file in sounds:
-              with wave_open(str(file)) as sound:
-                  assert sound.getnframes() > 0
+          files=list(Path('assets/sprites').glob('*.png'))
+          assert len(files)==33, f'Esperados 33 sprites; há {len(files)}'
+          for path in files:
+              with Image.open(path) as sprite:
+                  sprite.verify()
+          sounds=list(Path('assets/audio').glob('*.wav'))
+          assert len(sounds)==3, f'Esperados 3 WAV; há {len(sounds)}'
+          for path in sounds:
+              with wave_open(str(path)) as sound:
+                  assert sound.getnframes()>0
+          print('Assets auditados:',len(files),'PNG e',len(sounds),'WAV')
           PY
-
-      - name: Configurar JDK 17
-        uses: actions/setup-java@v4
+      - name: Contraste e auditoria pre-release
+        run: |
+          python tools/audit_ui_contrast.py --strict
+          python tools/pre_release_audit.py
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Configurar Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
-      - name: Gerar projeto Android nativo
-        run: flutter create --platforms=android --org com.roma.gladiatus --project-name gladiatus_pixel .
-
-      - name: Instalar dependências Dart
-        run: flutter pub get
-
-      - name: Verificar análise estática
+      - name: Criar projeto Android e dependencias
+        run: |
+          flutter create --platforms=android --org com.roma.gladiatus --project-name gladiatus_pixel .
+          flutter pub get
+      - name: Flutter analyze
         run: flutter analyze --no-fatal-infos
-
-      - name: Executar testes
-        run: flutter test
-
-      - name: Gerar APK release
-        run: flutter build apk --release --no-tree-shake-icons
-
-      - name: Publicar prévia HD para revisão visual
+      - name: Suite de testes e regressao
+        run: flutter test --reporter expanded
+      - name: Publicar comparativo visual para revisao
         uses: actions/upload-artifact@v4
         with:
-          name: Gladiatus-HD-128x144-Preview
+          name: Auditoria-Arte-128x144
           path: assets/previews/gladiator_comparison.png
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publicar APK
-        uses: actions/upload-artifact@v4
+  android:
+    name: APK somente apos auditoria aprovada
+    needs: audit
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          name: Gladiatus-Pixel-Art-APK
+          python-version: '3.12'
+      - name: Gerar arquivos validados
+        run: |
+          python -m pip install Pillow
+          python tools/generate_sprites.py
+          python tools/generate_hd_sprites.py
+          python tools/extract_hero_art.py
+          python tools/verify_hero_assets.py
+          python tools/generate_audio.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Preparar Android
+        run: |
+          flutter create --platforms=android --org com.roma.gladiatus --project-name gladiatus_pixel .
+          flutter pub get
+      - name: Gerar release apos auditoria
+        run: flutter build apk --release --no-tree-shake-icons
+      - name: Aviso de assinatura
+        run: |
+          echo "::warning::APK de teste: a assinatura persistente ainda requer keystore privado em GitHub Secrets. Nao desinstale versoes antigas sem backup."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gladiatus-Pixel-2-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
