@@ -12,12 +12,6 @@ void main(){
         SharedPreferences.setMockInitialValues({});
         await tester.binding.setSurfaceSize(Size(width,730));
         addTearDown(() async=>tester.binding.setSurfaceSize(null));
-        final previousError = FlutterError.onError;
-        FlutterError.onError = (details) {
-          debugPrint('UX AUDIT DIAGNOSTIC: ${details.toString()}');
-          previousError?.call(details);
-        };
-        addTearDown(() => FlutterError.onError = previousError);
         await tester.pumpWidget(const GladiatusApp());
         await tester.pumpAndSettle();
         expect(tester.takeException(),isNull);
