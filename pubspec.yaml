@@ -1,7 +1,7 @@
 name: gladiatus_pixel
 description: RPG romano em pixel art para Android.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -19,3 +20,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/sprites/
+    - assets/audio/
