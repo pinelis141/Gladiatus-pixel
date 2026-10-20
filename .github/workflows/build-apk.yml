@@ -26,15 +26,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip Pillow
           python tools/generate_sprites.py
+          python tools/generate_hd_sprites.py
+          python tools/generate_audio.py
           python - <<'PY'
           from pathlib import Path
           from PIL import Image
           files = sorted(Path('assets/sprites').glob('*.png'))
-          assert len(files) == 17, f'Sprites encontrados: {len(files)}'
+          assert len(files) == 32, f'Sprites encontrados: {len(files)}'
           for path in files:
               with Image.open(path) as im:
                   im.verify()
           print(f'{len(files)} sprites PNG validados.')
+          from wave import open as wave_open
+          sounds = sorted(Path('assets/audio').glob('*.wav'))
+          assert len(sounds) == 3
+          for file in sounds:
+              with wave_open(str(file)) as sound:
+                  assert sound.getnframes() > 0
           PY
 
       - name: Configurar JDK 17
