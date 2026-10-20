@@ -2,7 +2,7 @@ name: Build Gladiatus APK
 
 on:
   push:
-    branches: [main, master, feature/native-hd-sprites-128x144]
+    branches: [main, master, audit/quality-balance-ux-v13]
   workflow_dispatch:
 
 permissions:
