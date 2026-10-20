@@ -78,11 +78,28 @@ configurar um keystore privado persistente; este dado não pode ser inventado ou
 inserido no repositório. Não desinstalar o APK antigo sem exportação/backup de
 progresso.
 
-## Resultado da reauditoria
+## Resultado da reauditoria — execução confirmada
 
-**Pendente de CI.** Este bloco será preenchido depois de rodar a suite
-pre-release e avaliar a execução mais recente. O APK não deve ser produzido
-antes dessa validação.
+**GitHub Actions:** [auditoria pré-APK 39458018167](https://github.com/pinelis141/Gladiatus-pixel/actions/runs/39458018167), job `audit` concluído com `success`.
+
+- Geradores e validação: **33 PNGs e 3 WAV válidos**; arte base e overlays 128×144, prévia de personagem e contato espada-mão.
+- Contraste estrito: **aprovado**. Vermelho/painel **6,26:1**; bronze/painel **5,49:1**; dourado/painel **8,33:1**; todas as combinações monitoradas passaram.
+- `pre_release_audit.py`: **AUDIT OK**, invariantes críticas de game design, interface, saves e assets preservadas.
+- `flutter analyze --no-fatal-infos`: **sem erros fatais**.
+- `flutter test --reporter expanded`: **27 testes aprovados**, incluindo simulações de combate e fluxos de telas 320, 360 e 412dp.
+- Revisão de layout: diagnóstico instrumentado isolou overflow de 1dp no `AppBar`; removido ao mover o status para a área do corpo.
+- Pipeline de desenvolvimento: job Android **skipped** por condição explícita. **Nenhum APK foi gerado antes da nova auditoria**.
+
+Após limpar a instrumentação temporária de diagnóstico e esta documentação,
+a versão final da branch é submetida novamente à mesma auditoria pré-release.
+Somente depois de um resultado verde dessa nova execução será permitida a
+integração à `main` e a compilação do APK.
+
+**O que a auditoria automatizada não prova:** qualidade da experiência em
+aparelho real, reprodução exata de distribuição de vitórias dos jogadores,
+migração de instalação quando o certificado Android muda, TalkBack com
+hardware, nem ausência de regressões em combinações de inventário não
+exercitadas. Essas tarefas continuam abertas.
 
 ## Itens para evolução posterior sem impedir validação funcional
 
