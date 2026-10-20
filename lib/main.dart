@@ -1011,7 +1011,7 @@ class _GameScreenState extends State<GameScreen> {
           inventoryPage(), shopSection==0?marketPage():forgePage(),
         ]),
     bottomNavigationBar: NavigationBar(
-      height: 72,
+      height: 84,
       labelBehavior:NavigationDestinationLabelBehavior.alwaysShow,
       backgroundColor: Palette.panel,
       selectedIndex: page,
