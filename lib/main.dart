@@ -347,6 +347,12 @@ class _GameScreenState extends State<GameScreen> {
       isFighting=false;
     }
     if(outcome==null||!mounted)return;
+    if (outcome.retreated) {
+      setState(() => health = outcome!.remainingHealth);
+      unawaited(saveGame());
+      notice('Você recuou. Energia consumida; saúde preservada.');
+      return;
+    }
     String? drop;
     final reward=outcome.won?22+enemy.tier*13+
       (enemy.boss?110:0)+random.nextInt(15):0;
