@@ -962,7 +962,7 @@ class _GameScreenState extends State<GameScreen> {
         ]),
     bottomNavigationBar: NavigationBar(
       height: 72,
-      labelBehavior:NavigationDestinationLabelBehavior.onlyShowSelected,
+      labelBehavior:NavigationDestinationLabelBehavior.alwaysShow,
       backgroundColor: Palette.panel,
       selectedIndex: page,
       onDestinationSelected: (next) {
