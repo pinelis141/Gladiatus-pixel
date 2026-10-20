@@ -58,6 +58,7 @@ class _GameScreenState extends State<GameScreen> {
   final Set<String> defeatedBosses = {};
   String contractDay = localDayKey(DateTime.now());
   bool isFighting = false;
+  Future<void> _saveQueue = Future<void>.value();
 
   int bonus(int Function(Gear) f) =>
     equipped.values.fold<int>(0, (sum, gear) => sum + f(gear));
@@ -143,32 +144,52 @@ class _GameScreenState extends State<GameScreen> {
           ..addAll((data['bag'] as List<dynamic>? ?? []).map((value) =>
             Gear.fromJson(Map<String, dynamic>.from(value as Map))));
         health = n('health', maxHealth).clamp(0, maxHealth).toInt();
-        refreshShop();
+        shop.clear();
+        if (data['shop'] is List) {
+          shop.addAll((data['shop'] as List<dynamic>).map((value) =>
+            Gear.fromJson(Map<String, dynamic>.from(value as Map))));
+        } else {
+          refreshShop(); // Legacy save compatibility.
+        }
       }
     } catch (_) {
+      // Preserve the original record for later recovery; don't silently
+      // overwrite it here. Notify the player before they take an action.
       newGame();
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) notice('Save inválido. Jogo provisório iniciado; o arquivo antigo ainda está guardado.');
+        });
+      }
     }
     if (mounted) setState(() => loading = false);
   }
 
-  Future<void> saveGame() async {
-    final data = {
+  // Serialize writes so a slow older save cannot overwrite a newer one.
+  // Snapshot the state before scheduling the write.
+  Future<void> saveGame() {
+    final snapshot = jsonEncode({
       'level': level, 'experience': experience, 'gold': gold,
       'energy': energy, 'health': health, 'wins': wins, 'points': points,
       'strength': strength, 'dexterity': dexterity,
       'agility': agility, 'constitution': constitution,
-      'rivalVictories':rivalVictories, 'contracts':contracts,
-      'claimedContracts':claimedContracts.toList(),
-      'defeatedBosses':defeatedBosses.toList(), 'contractDay':contractDay,
+      'rivalVictories': rivalVictories, 'contracts': contracts,
+      'claimedContracts': claimedContracts.toList(),
+      'defeatedBosses': defeatedBosses.toList(), 'contractDay': contractDay,
       'equipped': equipped.values.map((g) => g.toJson()).toList(),
       'bag': bag.map((g) => g.toJson()).toList(),
-    };
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(saveKey, jsonEncode(data));
-    } catch (_) {
-      if (mounted) notice('Não foi possível salvar neste dispositivo.');
-    }
+      'shop': shop.map((g) => g.toJson()).toList(),
+    });
+    _saveQueue = _saveQueue.then((_) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final stored = await prefs.setString(saveKey, snapshot);
+        if (!stored) throw StateError('Persistência recusada');
+      } catch (_) {
+        if (mounted) notice('Falha ao salvar. Tente novamente.');
+      }
+    });
+    return _saveQueue;
   }
 
   void notice(String message) {
@@ -227,7 +248,13 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void rest() {
-    if (gold < 15) notice('A taverna concede socorro gratuito ao gladiador.');
+    // Emergency recovery prevents softlocks, but free resting while healthy
+    // would make combat and the economy consequence-free.
+    if (gold < 15 && health > 0 && energy > 0) {
+      notice('Descanso custa 15 moedas. Emergências são gratuitas.');
+      return;
+    }
+    if (gold < 15) notice('Socorro de emergência gratuito.');
     setState(() {
       if(gold>=15) gold-=15;
       health=maxHealth;energy=10;
@@ -399,15 +426,19 @@ class _GameScreenState extends State<GameScreen> {
     ]),
   );
 
-  Widget stat(String name, int value) => Row(children: [
+  Widget stat(String name, int value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 1),
+    child: Row(children: [
     Expanded(child: Text(name)),
     Text(value.toString(), style: const TextStyle(color: Palette.gold)),
     IconButton(
       onPressed: points > 0 ? () => train(name) : null,
       tooltip: 'Melhorar ' + name,
-      icon: const Icon(Icons.add_circle_outline),
+      icon: const Icon(Icons.add_circle_outline, size: 20),
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
     ),
-  ]);
+  ]));
 
   Widget gearCard(Gear gear, String action, VoidCallback onPressed,
     {VoidCallback? secondary, String? secondaryLabel}) {
@@ -465,14 +496,11 @@ class _GameScreenState extends State<GameScreen> {
             color: Palette.gold, fontWeight: FontWeight.bold)),
         Text('Vitórias: ' + wins.toString()),
         const SizedBox(height: 12),
-        LinearProgressIndicator(
-          value: health / maxHealth, minHeight: 9,
-          color: Palette.red),
-        Text('Vida ' + health.toString() + '/' + maxHealth.toString()),
-        const SizedBox(height: 9),
-        LinearProgressIndicator(value: experience / xpNeeded, minHeight: 7),
-        Text('Experiência ' + experience.toString() +
-          '/' + xpNeeded.toString()),
+        RomanProgress(label: 'VIDA',current:health,
+          maximum:maxHealth,color:Palette.red),
+        const SizedBox(height: 11),
+        RomanProgress(label: 'EXPERIÊNCIA',current:experience,
+          maximum:xpNeeded,color:Palette.gold),
       ])),
       panel('Atributos • ' + points.toString() + ' pontos disponíveis',
         Column(children: [
@@ -532,7 +560,6 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget contractsPanel() {
-    dailyResetIfNeeded();
     return panel('Contratos diários',Column(children:[
       const Text('Renovação a cada dia local. Conclua objetivos '
         'para resgatar ouro e experiência.',
@@ -626,6 +653,19 @@ class _GameScreenState extends State<GameScreen> {
     ],
   );
 
+  void rerollShop() {
+    const fee = 25;
+    if (gold < fee) {
+      notice('Você precisa de 25 moedas para renovar a loja.');
+      return;
+    }
+    setState(() {
+      gold -= fee;
+      refreshShop();
+    });
+    unawaited(saveGame());
+  }
+
   Widget marketPage() => ListView(
     padding: const EdgeInsets.all(12),
     children: [
@@ -639,8 +679,8 @@ class _GameScreenState extends State<GameScreen> {
         const Text('Mercadorias com raridade e atributos variados.'),
         TextButton.icon(
           icon: const Icon(Icons.refresh),
-          label: const Text('Atualizar mercadorias'),
-          onPressed: () => setState(refreshShop)),
+          label: const Text('Renovar ofertas • 25 ouro'),
+          onPressed: gold >= 25 ? rerollShop : null),
       ])),
       ...shop.map((gear) => gearCard(
         gear, 'Comprar • ' + gear.price.toString() + ' ouro',
@@ -678,6 +718,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      toolbarHeight: 52,
       backgroundColor: Palette.panel,
       title: const Text('GLADIATUS PIXEL',
         style: TextStyle(color: Palette.gold, fontSize: 18,
@@ -689,9 +730,9 @@ class _GameScreenState extends State<GameScreen> {
           icon: const Icon(Icons.save_outlined)),
       ],
       bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(44),
+        preferredSize: const Size.fromHeight(32),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
           child: Row(children: [
             Expanded(child: Text('NV ' + level.toString() +
               ' • OURO ' + gold.toString(),
@@ -713,7 +754,13 @@ class _GameScreenState extends State<GameScreen> {
       height: 72,
       backgroundColor: Palette.panel,
       selectedIndex: page,
-      onDestinationSelected: (next) => setState(() => page = next),
+      onDestinationSelected: (next) {
+        setState(() {
+          page = next;
+          if (next == 1) dailyResetIfNeeded();
+        });
+        if (next == 1) unawaited(saveGame());
+      },
       destinations: const [
         NavigationDestination(icon: Icon(Icons.person), label: 'Herói'),
         NavigationDestination(icon: Icon(Icons.map), label: 'Missões'),
