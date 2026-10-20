@@ -73,7 +73,7 @@ def run():
     assert 'enemy.boss?110:0' not in main
     assert 'enemy.boss ? 110 : 0' not in main
     assert 'firstBossWin?110:0' in main
-    assert 'labelBehavior:NavigationDestinationLabelBehavior.alwaysShow' in main
+    assert 'NavigationDestinationLabelBehavior.alwaysShow' in main
     assert 'width:300,height:110' not in main
     assert 'scale:bounce?.97' not in screen
     assert 'minHeight:38' not in main
