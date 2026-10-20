@@ -153,7 +153,7 @@ class BattleEngine {
         notes.add('ESQUIVA!');
       } else {
         var blow = 3 + enemy.tier * 2 + playerLevel +
-            min(5, max(0, rivalRank)) + random.nextInt(6);
+            min(5, max(0, rivalRank)).toInt() + random.nextInt(6);
         if (intent == EnemyIntent.heavy) blow = (blow * 1.65).round();
         if (intent == EnemyIntent.defend) blow = (blow * .65).round();
         blow = max(1, blow - protection ~/ 30);
