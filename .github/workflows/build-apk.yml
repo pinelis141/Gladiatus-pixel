@@ -2,7 +2,7 @@ name: Build Gladiatus APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, feature/rpg-romano-v2]
   workflow_dispatch:
 
 permissions:
