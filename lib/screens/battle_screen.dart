@@ -28,6 +28,7 @@ class _BattleScreenState extends State<BattleScreen> {
   late final BattleEngine engine;
   final AudioPlayer sfx=AudioPlayer();
   bool bounce=false;
+  bool retreatDialogOpen=false;
   String message='Escolha seu primeiro movimento.';
 
   @override
@@ -64,6 +65,43 @@ class _BattleScreenState extends State<BattleScreen> {
     });
   }
 
+  Future<void> confirmRetreat() async {
+    if (retreatDialogOpen || engine.finished || !mounted) {
+      if (engine.finished) finish();
+      return;
+    }
+    retreatDialogOpen = true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Palette.panel,
+        title: const Text('Recuar do combate?'),
+        content: const Text(
+          'A energia já foi gasta. Sua vida atual será preservada, '
+          'mas você não receberá recompensas.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('CONTINUAR LUTANDO'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('RECUAR'),
+          ),
+        ],
+      ),
+    );
+    retreatDialogOpen = false;
+    if (confirmed == true && mounted) {
+      Navigator.of(context).pop(BattleOutcome(
+        opponentId: widget.enemy.id, won: false,
+        remainingHealth: engine.playerHealth,
+        turns: engine.round, damageDealt: engine.totalDealt,
+        damageTaken: engine.totalTaken,
+      ));
+    }
+  }
+
   void finish() {
     if(!engine.finished)return;
     Navigator.of(context).pop(engine.outcome);
@@ -95,12 +133,21 @@ class _BattleScreenState extends State<BattleScreen> {
     final win=engine.finished && engine.won;
     return PopScope(
       canPop:false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(confirmRetreat());
+      },
       child:Scaffold(
         appBar:AppBar(
           title:Text(widget.enemy.arena?'DUELO NO COLISEU':'EXPEDIÇÃO',
             style:const TextStyle(color:Palette.gold,fontSize:17)),
           backgroundColor:Palette.panel,
           automaticallyImplyLeading:false,
+          leading: IconButton(
+            tooltip: 'Sair do combate',
+            icon: const Icon(Icons.arrow_back),
+            onPressed: engine.finished ? finish :
+              () => unawaited(confirmRetreat()),
+          ),
         ),
         body:RomanBackdrop(scene:widget.enemy.scene,child:SafeArea(
           child:ListView(padding:const EdgeInsets.all(12),children:[
@@ -167,7 +214,7 @@ class _BattleScreenState extends State<BattleScreen> {
                 const SizedBox(height:10),
                 FilledButton.icon(onPressed:finish,
                   icon:const Icon(Icons.check),
-                  label:const Text('RECOLHER RECOMPENSAS')),
+                  label:Text(win ? 'RECOLHER RECOMPENSAS' : 'SAIR DA ARENA')),
               ])),
             const SizedBox(height:12),
             if(engine.history.isNotEmpty)RomanPanel(
