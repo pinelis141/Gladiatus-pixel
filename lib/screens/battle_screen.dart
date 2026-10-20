@@ -116,7 +116,7 @@ class _BattleScreenState extends State<BattleScreen> {
                   child:HeroAvatar(equipment:widget.equipment,
                     width:136,height:153)),
                 AnimatedScale(
-                  scale:bounce?.97:1.045,
+                  scale: bounce ? .97 : 1.045,
                   duration:const Duration(milliseconds:170),
                   child:Sprite(widget.enemy.sprite,width:132,height:145)),
               ]),
