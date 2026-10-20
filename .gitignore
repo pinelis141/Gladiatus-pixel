@@ -1,0 +1,19 @@
+# Flutter/Android generated files
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+android/
+.idea/
+*.iml
+
+# Cryptographic release credentials: NEVER commit
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pfx
+**/key.properties
+**/GLADIATUS_KEYSTORE_BASE64*
+**/GLADIATUS_KEYSTORE_PASSWORD*
+**/*release-signing-private*

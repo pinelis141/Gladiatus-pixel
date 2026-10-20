@@ -1,4 +1,4 @@
-# Gladiatus Pixel — RPG Romano (v1.3)
+# Gladiatus Pixel — RPG Romano (v2.1)
 
 RPG **independente** para Android feito em Flutter, com interface romana, batalha por turnos e pixel art em alta resolução (128×144). O projeto não contém código, marcas, servidores ou artes do Gladiatus original.
 
@@ -15,11 +15,24 @@ RPG **independente** para Android feito em Flutter, com interface romana, batalh
 **Auditoria de código e limitações restantes:**
 [docs/AUDITORIA_V1_3.md](docs/AUDITORIA_V1_3.md).
 
-**Atenção às atualizações no Android:** esta distribuição automatizada ainda
-não configura uma chave de assinatura própria e persistente. Instalar o APK
-sobre versões anteriores pode falhar por assinatura diferente. Antes de
-desinstalar uma versão com progresso salvo, configure assinatura estável e
-um procedimento de exportação do save.
+## Assinatura Android estável — v2.1
+
+O workflow passou a **exigir uma chave PKCS12 privada e fixa** por dois GitHub
+Actions Secrets: `GLADIATUS_KEYSTORE_BASE64` e
+`GLADIATUS_KEYSTORE_PASSWORD`. Sem eles, o workflow falha **sem gerar APK
+com assinatura de depuração**.
+
+Depois de gerar o APK, `apksigner` verifica que seu certificado SHA-256
+é o publicado em `tools/expected_release_cert.sha256`.
+
+Leia o procedimento: **[Assinatura permanente e compatibilidade de
+atualizações](docs/ASSINATURA_ANDROID_V2_1.md)**.
+
+**Atenção:** versões antigas assinadas com chaves de depuração diferentes não
+poderão ser atualizadas diretamente sem o certificado original. **Não
+desinstale uma versão com progresso salvo sem cópia de segurança.**
+A primeira instalação assinada com a nova chave estabelece uma identidade
+permanente para futuras atualizações.
 
 ## Recursos implementados
 
