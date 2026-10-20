@@ -250,75 +250,140 @@ class _GameScreenState extends State<GameScreen> {
     unawaited(saveGame());
   }
 
-  void fight(String name, String sprite, int difficulty) {
-    if (energy == 0) { notice('Sem energia. Visite a taverna.'); return; }
-    if (health == 0) { notice('Ferido. Visite a taverna.'); return; }
-    final weapon = equipped[Slot.weapon];
-    final lower = weapon?.minDamage ?? 3;
-    final upper = max(lower, weapon?.maxDamage ?? 6);
-    var enemyHp = 18 + difficulty * 17 + level * 6;
-    var myHp = health, rounds = 0, damageDone = 0, damageTaken = 0;
-    while (myHp > 0 && enemyHp > 0 && rounds < 30) {
-      rounds++;
-      if (random.nextInt(100) < min(94, 70 + hitChance - difficulty * 2)) {
-        final damage = lower + random.nextInt(upper - lower + 1) +
-          attack ~/ 3;
-        enemyHp -= damage;
-        damageDone += damage;
-      }
-      if (enemyHp <= 0) break;
-      if (random.nextInt(100) >= min(35, dodgeChance)) {
-        final damage = max(1, 3 + difficulty * 3 + level +
-          random.nextInt(7) - protection ~/ 35);
-        myHp -= damage;
-        damageTaken += damage;
-      }
+  void dailyResetIfNeeded(){
+    final today=localDayKey(DateTime.now());
+    if(contractDay!=today) {
+      contracts.clear();claimedContracts.clear();contractDay=today;
     }
-    final won = enemyHp <= 0;
-    final reward = won ? 15 + difficulty * 12 + random.nextInt(16) : 0;
-    final earnedXp = won ? 12 + difficulty * 9 : 0;
+  }
+
+  void progressContract(String type){
+    dailyResetIfNeeded();
+    contracts[type]=(contracts[type]??0)+1;
+  }
+
+  void checkLevelUp(){
+    while(experience>=xpNeeded) {
+      experience-=xpNeeded;level++;points+=3;health=maxHealth;
+    }
+  }
+
+  void claimContract(Contract contract){
+    dailyResetIfNeeded();
+    if((contracts[contract.id]??0)<contract.target ||
+        claimedContracts.contains(contract.id)) return;
+    setState((){
+      claimedContracts.add(contract.id);
+      gold+=contract.gold;experience+=contract.xp;checkLevelUp();
+    });
+    unawaited(saveGame());
+    notice('Contrato: +' + contract.gold.toString() +
+      ' ouro e +' + contract.xp.toString() + ' XP.');
+  }
+
+  bool accessible(EnemySpec opponent){
+    if(level<opponent.minLevel)return false;
+    if(opponent.region=='Porto de Óstia' &&
+       !defeatedBosses.contains('forest_boss'))return false;
+    if(opponent.region=='Ruínas de Vulcano' &&
+       !defeatedBosses.contains('port_boss'))return false;
+    return true;
+  }
+
+  Future<void> fight(EnemySpec enemy) async {
+    if(isFighting)return;
+    if(!accessible(enemy)) {
+      notice('Região bloqueada. Suba de nível e derrote o chefe anterior.');
+      return;
+    }
+    if(energy==0){notice('Sem energia. Descanse na taverna.');return;}
+    if(health==0){notice('Ferido. Descanse na taverna.');return;}
+    setState((){
+      isFighting=true;energy--;
+    });
+    unawaited(saveGame());
+    final weapon=equipped[Slot.weapon];
+    BattleOutcome? outcome;
+    try {
+      outcome=await Navigator.of(context).push<BattleOutcome>(
+        MaterialPageRoute(builder: (_)=>BattleScreen(
+          enemy:enemy,equipment:Map<Slot,Gear>.from(equipped),
+          startingHealth:health,maxHealth:maxHealth,
+          playerLevel:level,power:attack,accuracy:hitChance,
+          evasion:dodgeChance,protection:protection,
+          minWeapon:weapon?.minDamage??3,
+          maxWeapon:weapon?.maxDamage??6,
+          rivalRank:rivalVictories[enemy.id]??0,
+        )),
+      );
+    } finally {
+      isFighting=false;
+    }
+    if(outcome==null||!mounted)return;
     String? drop;
-    setState(() {
-      energy--; health = max(0, myHp);
-      if (won) {
-        wins++; gold += reward; experience += earnedXp;
-        while (experience >= xpNeeded) {
-          experience -= xpNeeded;
-          level++; points += 3; health = maxHealth;
+    final reward=outcome.won?22+enemy.tier*13+
+      (enemy.boss?110:0)+random.nextInt(15):0;
+    final gainedXp=outcome.won?15+enemy.tier*9+
+      (enemy.boss?65:0):0;
+    setState((){
+      health=outcome!.remainingHealth;
+      if(outcome.won) {
+        wins++;gold+=reward;experience+=gainedXp;
+        progressContract('victories');
+        progressContract(enemy.arena?'arena':'expedition');
+        if(enemy.arena) {
+          rivalVictories[enemy.id]=(rivalVictories[enemy.id]??0)+1;
         }
-        if (bag.length < 40 && random.nextDouble() < .35) {
-          final loot = GearFactory.create(level);
-          bag.add(loot);
-          drop = loot.name;
+        if(enemy.boss)defeatedBosses.add(enemy.id);
+        checkLevelUp();
+        if(bag.length<40 && random.nextDouble()<
+            (enemy.boss?.85:.40)) {
+          final loot=GearFactory.create(level);
+          bag.add(loot);drop=loot.name;
         }
       }
     });
     unawaited(saveGame());
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Palette.panel,
-        title: Text(won ? 'Vitória: ' + name : 'Derrota: ' + name),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Sprite(sprite, width: 100, height: 100),
-          const SizedBox(height: 12),
-          Text('Rodadas: ' + rounds.toString() +
-            ' • Dano causado: ' + damageDone.toString() +
-            ' • Recebido: ' + damageTaken.toString(),
-            textAlign: TextAlign.center),
-          if (won) Text('+' + reward.toString() + ' ouro • +' +
-            earnedXp.toString() + ' XP'),
-          if (drop != null) Text('Espólio: ' + drop!,
-            textAlign: TextAlign.center),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CONTINUAR')),
-        ],
-      ),
-    );
+    if(!mounted)return;
+    showDialog<void>(context:context,builder:(context)=>AlertDialog(
+      backgroundColor:Palette.panel,
+      title:Text(outcome!.won?'Triunfo romano':'Derrota'),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        Text(enemy.name),
+        Text('Rodadas: '+outcome.turns.toString()),
+        Text(outcome.won?'+'+reward.toString()+' ouro • +'+
+          gainedXp.toString()+' XP':'Tente novamente.'),
+        if(drop!=null)Text('Espólio: '+drop!),
+        if(enemy.arena&&outcome.won)
+          Text('Rivalidade '+(rivalVictories[enemy.id]??0).toString()),
+        if(enemy.boss&&outcome.won)
+          const Text('Uma nova região foi desbloqueada!'),
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(context),
+        child:const Text('CONTINUAR'))],
+    ));
+  }
+
+  void forge(Gear gear,{required bool fromEquipment}){
+    final existing=fromEquipment?equipped[gear.slot]:
+      (bag.where((g)=>g.id==gear.id).isEmpty?null:
+       bag.firstWhere((g)=>g.id==gear.id));
+    if(existing==null||existing.id!=gear.id)return;
+    if(gear.forgeRank>=5){notice('Reforja máxima alcançada.');return;}
+    if(gold<gear.forgeCost){notice('Ouro insuficiente.');return;}
+    final upgrade=gear.reforged();
+    setState((){
+      gold-=gear.forgeCost;
+      if(fromEquipment){equipped[gear.slot]=upgrade;}
+      else {
+        final i=bag.indexWhere((g)=>g.id==gear.id);
+        if(i>=0)bag[i]=upgrade;
+      }
+      progressContract('forge');
+      health=min(health,maxHealth);
+    });
+    unawaited(saveGame());
+    notice('Ferreiro concluiu o reforço +'+upgrade.forgeRank.toString()+'.');
   }
 
   Widget panel(String heading,Widget child)=>Padding(
