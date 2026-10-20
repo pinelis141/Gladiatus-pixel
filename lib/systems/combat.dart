@@ -36,13 +36,14 @@ class BattleTurn {
 class BattleOutcome {
   final String opponentId;
   final bool won;
+  final bool retreated;
   final int remainingHealth;
   final int turns;
   final int damageDealt;
   final int damageTaken;
   const BattleOutcome({
     required this.opponentId, required this.won,
-    required this.remainingHealth, required this.turns,
+    this.retreated = false, required this.remainingHealth, required this.turns,
     required this.damageDealt, required this.damageTaken,
   });
 }
@@ -88,13 +89,18 @@ class BattleEngine {
     Random? rng,
   }) : random = rng ?? Random(),
        maxEnemyHealth = 18 + enemy.tier * 19 + playerLevel * 7 +
-           (enemy.boss ? 35 : 0) + rivalRank * 11 {
+           (enemy.boss ? 35 : 0) + min(10, max(0, rivalRank)) * 11 {
     playerHealth = startingHealth.clamp(0, maxPlayerHealth).toInt();
     enemyHealth = maxEnemyHealth;
   }
 
   BattleTurn play(CombatMove move) {
     if (finished) throw StateError('Combate encerrado');
+    // Invalid heavy attacks fall back to one quick action, not two stamina
+    // gains or two turns.
+    if (move == CombatMove.heavy && stamina < 2) {
+      move = CombatMove.quick;
+    }
     round++;
     int dealt = 0, received = 0;
     bool crit = false;
@@ -104,8 +110,6 @@ class BattleEngine {
       stamina = min(5, stamina + 2);
       combo = min(3, combo + 1);
       notes.add('Você assume posição defensiva.');
-    } else if (move == CombatMove.heavy && stamina < 2) {
-      return playFallback();
     } else {
       if (move == CombatMove.heavy) {
         stamina -= 2;
@@ -125,7 +129,7 @@ class BattleEngine {
         if (move == CombatMove.feint) base = (base * .68).round();
         if (crit) base = (base * 1.5).round();
         base += combo * 2;
-        dealt = max(1, base - (enemy.tier + rivalRank) ~/ 2);
+        dealt = max(1, base - (enemy.tier + min(10, max(0, rivalRank))) ~/ 2);
         enemyHealth = max(0, enemyHealth - dealt);
         totalDealt += dealt;
         notes.add(crit ? 'Golpe crítico! -$dealt HP.' : 'Você causa $dealt de dano.');
@@ -142,7 +146,7 @@ class BattleEngine {
         notes.add('Você esquiva do contra-ataque!');
       } else {
         var blow = 3 + enemy.tier * 3 + playerLevel +
-            rivalRank * 2 + random.nextInt(7);
+            min(10, max(0, rivalRank)) * 2 + random.nextInt(7);
         blow = max(1, blow - protection ~/ 36);
         if (defending) blow = max(1, (blow * .35).round());
         received = blow;
@@ -160,18 +164,6 @@ class BattleEngine {
         notes.join(' '));
     history.add(event);
     return event;
-  }
-
-  BattleTurn playFallback() {
-    stamina = min(5, stamina + 1);
-    // Never recurse into a heavy strike without enough stamina.
-    return _lightFallback();
-  }
-
-  BattleTurn _lightFallback() {
-    // A heavy move without stamina resolves as a normal quick move.
-    round--;
-    return play(CombatMove.quick);
   }
 
   BattleOutcome get outcome {

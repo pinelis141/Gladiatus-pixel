@@ -39,6 +39,12 @@ def run() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     for index, name in enumerate(NAMES):
         sprite = atlas.crop((index * W, 0, (index + 1) * W, H))
+        # The gladius was exported left of the hero. Recenter its grip on
+        # the hero's visible hand, keeping the common canvas unchanged.
+        if name == "equip_weapon_hd":
+            aligned = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            aligned.paste(sprite, (20, 0))
+            sprite = aligned
         # Crisp silhouettes, transparent voids and lossless PNG export.
         # The input is a small, lossy WEBP atlas to keep the GitHub repo lean.
         alpha = sprite.getchannel("A").point(lambda value: 0 if value < 100 else 255)

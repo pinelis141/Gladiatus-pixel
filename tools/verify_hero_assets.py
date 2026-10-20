@@ -26,6 +26,19 @@ def run():
                 raise RuntimeError(f'{name} has defective alpha channel')
             sprites[name]=rgba.copy()
 
+    # Regression: the gladius grip must actually overlap the left hand
+    # on the base sprite. Earlier builds showed a floating sword.
+    grip=(31,66,52,89)
+    hero_alpha=sprites['gladiator_base_hd'].getchannel('A').crop(grip)
+    blade_alpha=sprites['equip_weapon_hd'].getchannel('A').crop(grip)
+    contact=sum(1 for a,b in zip(hero_alpha.get_flattened_data(),
+                                  blade_alpha.get_flattened_data())
+                if a>100 and b>100)
+    if contact<45:
+        raise RuntimeError(
+            f'Weapon detached from hand: only {contact} overlapping pixels.'
+        )
+
     mod=sprites['gladiator_base_hd'].copy()
     for name in ART[1:-1]:
         mod.alpha_composite(sprites[name])

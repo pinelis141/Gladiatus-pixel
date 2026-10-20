@@ -4,11 +4,12 @@ import 'package:gladiatus_pixel/systems/combat.dart';
 import 'package:gladiatus_pixel/systems/content.dart';
 
 void main() {
-  BattleEngine setup({int tier=1,int seed=1})=>BattleEngine(
+  BattleEngine setup({int tier=1,int seed=1,int rivalRank=0})=>BattleEngine(
     enemy:expeditions.firstWhere((e)=>e.tier==tier),
     startingHealth:120,maxPlayerHealth:120,
     playerLevel:3,power:18,accuracy:12,evasion:10,
-    protection:25,minWeapon:7,maxWeapon:13,rng:Random(seed),
+    protection:25,minWeapon:7,maxWeapon:13,
+    rivalRank:rivalRank,rng:Random(seed),
   );
 
   test('battle advances turns and respects health and stamina bounds',(){
@@ -57,4 +58,32 @@ void main() {
     }
     expect(completed,1000);
   });
+  test('insufficient stamina heavy is only one quick action',(){
+    final game=setup(seed:2);
+    game.stamina=1;
+    game.play(CombatMove.heavy);
+    expect(game.round,1);
+    expect(game.history.length,1);
+    expect(game.stamina,2);
+  });
+
+  test('arena rivalry capped to avoid unwinnable encounters',(){
+    final veteran=setup(rivalRank:10,seed:1);
+    final extreme=setup(rivalRank:100000,seed:1);
+    expect(extreme.maxEnemyHealth,veteran.maxEnemyHealth);
+    final a=veteran.play(CombatMove.quick);
+    final b=extreme.play(CombatMove.quick);
+    expect(a.inflicted,b.inflicted);
+    expect(a.received,b.received);
+  });
+
+  test('surrender outcome cannot be mistaken for a victory',(){
+    const retreat=BattleOutcome(
+      opponentId:'wolf',won:false,retreated:true,
+      remainingHealth:90,turns:2,damageDealt:10,damageTaken:10,
+    );
+    expect(retreat.retreated,true);
+    expect(retreat.won,false);
+  });
+
 }

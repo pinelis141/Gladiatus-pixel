@@ -1,6 +1,25 @@
-# Gladiatus Pixel — RPG Romano (v1.2)
+# Gladiatus Pixel — RPG Romano (v1.3)
 
 RPG **independente** para Android feito em Flutter, com interface romana, batalha por turnos e pixel art em alta resolução (128×144). O projeto não contém código, marcas, servidores ou artes do Gladiatus original.
+
+## v1.3 — correções verificadas
+
+- Arte da espada reposicionada com verificação de alinhamento ao punho.
+- Combate corrigido: vigor, recuo com confirmação e força limitada dos rivais.
+- Saves gravados sequencialmente, loja persistente e backup para registros
+  inválidos, preservando o formato de save existente.
+- Renovação da loja por 25 moedas; redução de exploração econômica.
+- HUD mais compacto e barra de experiência com preenchimento correto.
+- Novos testes de regressão de batalhas, equipamentos, XP e mercado.
+
+**Auditoria de código e limitações restantes:**
+[docs/AUDITORIA_V1_3.md](docs/AUDITORIA_V1_3.md).
+
+**Atenção às atualizações no Android:** esta distribuição automatizada ainda
+não configura uma chave de assinatura própria e persistente. Instalar o APK
+sobre versões anteriores pode falhar por assinatura diferente. Antes de
+desinstalar uma versão com progresso salvo, configure assinatura estável e
+um procedimento de exportação do save.
 
 ## Recursos implementados
 

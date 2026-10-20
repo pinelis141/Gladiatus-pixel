@@ -115,11 +115,13 @@ extension Reforging on Gear {
   Gear reforged() {
     if (forgeRank >= 5) return this;
     int improved(int n) => n == 0 ? 0 : n + max(1, (n * .15).round());
+    final empty = minDamage == 0 && maxDamage == 0 && armor == 0 &&
+        strength == 0 && dexterity == 0 && agility == 0 && constitution == 0;
     return Gear(
       id: id, name: name, slot: slot, rarity: rarity, level: level,
       price: price + forgeCost ~/ 2, forgeRank: forgeRank + 1,
       minDamage: improved(minDamage), maxDamage: improved(maxDamage),
-      armor: improved(armor), strength: improved(strength),
+      armor: improved(armor), strength: improved(strength) + (empty ? 1 : 0),
       dexterity: improved(dexterity), agility: improved(agility),
       constitution: improved(constitution),
     );
