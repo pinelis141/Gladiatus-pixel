@@ -461,6 +461,91 @@ class _GameScreenState extends State<GameScreen> {
     notice('Ferreiro concluiu o reforço +'+upgrade.forgeRank.toString()+'.');
   }
 
+  String slotLabel(Slot s)=>switch(s){
+    Slot.weapon=>'Arma', Slot.shield=>'Escudo',
+    Slot.helmet=>'Capacete', Slot.armor=>'Armadura',
+    Slot.gloves=>'Luvas',Slot.boots=>'Botas',
+    Slot.ring=>'Anel',Slot.amulet=>'Amuleto',
+  };
+  String rarityLabel(Rarity r)=>switch(r){
+    Rarity.common=>'Comum',Rarity.green=>'Incomum',
+    Rarity.blue=>'Raro',Rarity.purple=>'Épico',
+    Rarity.orange=>'Lendário',
+  };
+  String lockReason(EnemySpec e){
+    if(level<e.minLevel)return 'Exige nível ${e.minLevel}';
+    if(e.region=='Porto de Óstia'&&
+        !defeatedBosses.contains('forest_boss')){
+      return 'Derrote o Guardião da Floresta';
+    }
+    if(e.region=='Ruínas de Vulcano'&&
+        !defeatedBosses.contains('port_boss')){
+      return 'Derrote o Almirante Renegado';
+    }
+    return '';
+  }
+  Future<void> sellSafely(Gear gear) async {
+    if(!bag.any((x)=>x.id==gear.id))return;
+    if(gear.rarity.index>=2){
+      final ok=await showDialog<bool>(context:context,
+        builder:(context)=>AlertDialog(
+          title:const Text('Vender equipamento raro?'),
+          content:Text('Vender ${gear.name} por '
+            '${max(1,gear.price~/2)} moedas? Esta venda é reversível '
+            'por alguns segundos.'),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(context,false),
+              child:const Text('CANCELAR')),
+            FilledButton(onPressed:()=>Navigator.pop(context,true),
+              child:const Text('VENDER')),
+          ]));
+      if(ok!=true||!mounted)return;
+    }
+    final value=max(1,gear.price~/2);
+    sell(gear);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content:Text('Vendido: ${gear.name}. +$value ouro.'),
+      action:SnackBarAction(label:'DESFAZER',onPressed:(){
+        if(gold<value||bag.length>=40){
+          notice('Não foi possível desfazer.');return;
+        }
+        setState((){
+          gold-=value;
+          bag.add(gear);
+        });
+        unawaited(saveGame());
+      }),
+    ));
+  }
+  void openMission(){setState(()=>page=1);}
+  void recover(){
+    rest();
+  }
+  void showPreferences(){
+    showModalBottomSheet<void>(context:context,showDragHandle:true,
+      builder:(context)=>StatefulBuilder(builder:(context,refresh)=>
+        SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const ListTile(title:Text('Configurações de acessibilidade'),
+            subtitle:Text('Preferências salvas neste dispositivo')),
+          SwitchListTile(
+            title:const Text('Efeitos sonoros'),
+            value:soundEnabled,
+            onChanged:(v){setState(()=>soundEnabled=v);
+              refresh((){});unawaited(saveGame());}),
+          SwitchListTile(
+            title:const Text('Vibração dos golpes'),
+            value:vibrationEnabled,
+            onChanged:(v){setState(()=>vibrationEnabled=v);
+              refresh((){});unawaited(saveGame());}),
+          ListTile(
+            leading:const Icon(Icons.save_outlined),
+            title:Text('Estado do save: $saveStatus'),
+            subtitle:const Text('O jogo também salva automaticamente'),
+            onTap:()=>unawaited(saveGame())),
+          const SizedBox(height:12),
+        ]))));
+  }
+
   Widget panel(String heading,Widget child)=>Padding(
     padding:const EdgeInsets.only(bottom:12),
     child:RomanPanel(title:heading,child:child),
@@ -474,109 +559,141 @@ class _GameScreenState extends State<GameScreen> {
     ]),
   );
 
-  Widget stat(String name, int value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 1),
-    child: Row(children: [
-    Expanded(child: Text(name)),
-    Text(value.toString(), style: const TextStyle(color: Palette.gold)),
-    IconButton(
-      onPressed: points > 0 ? () => train(name) : null,
-      tooltip: 'Melhorar ' + name,
-      icon: const Icon(Icons.add_circle_outline, size: 20),
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
-    ),
-  ]));
+  Widget stat(String name,int value,{int equipmentBonus=0})=>Padding(
+    padding:const EdgeInsets.symmetric(vertical:3),
+    child:Row(children:[
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+        children:[
+        Text(name,style:const TextStyle(fontSize:14)),
+        Text('Base ${value-equipmentBonus} + itens $equipmentBonus',
+          style:const TextStyle(fontSize:12,color:Palette.paleGold)),
+      ])),
+      Text('$value',style:const TextStyle(color:Palette.gold,fontSize:16)),
+      const SizedBox(width:6),
+      IconButton(
+        onPressed:points>0?()=>train(name):null,
+        tooltip:'Aumentar $name em 1 ponto',
+        icon:const Icon(Icons.add_circle_outline,size:23),
+        constraints:const BoxConstraints(minHeight:48,minWidth:48)),
+    ]),
+  );
 
-  Widget gearCard(Gear gear, String action, VoidCallback onPressed,
-    {VoidCallback? secondary, String? secondaryLabel}) {
-    final stats = <String>[
-      if (gear.minDamage > 0)
-        'Dano ' + gear.minDamage.toString() + '-' + gear.maxDamage.toString(),
-      if (gear.armor > 0) 'Armadura ' + gear.armor.toString(),
-      if (gear.strength > 0) 'FOR +' + gear.strength.toString(),
-      if (gear.dexterity > 0) 'DES +' + gear.dexterity.toString(),
-      if (gear.agility > 0) 'AGI +' + gear.agility.toString(),
-      if (gear.constitution > 0) 'CON +' + gear.constitution.toString(),
+  Widget gearCard(Gear gear,String action,VoidCallback? onPressed,
+    {VoidCallback? secondary,String? secondaryLabel}){
+    final current=equipped[gear.slot];
+    final deltaDamage=gear.maxDamage-(current?.maxDamage??0);
+    final deltaArmor=gear.armor-(current?.armor??0);
+    final deltaStrength=gear.strength-(current?.strength??0);
+    final deltaDex=gear.dexterity-(current?.dexterity??0);
+    String difference(int n)=>n>0?'+$n':'$n';
+    final lines=<String>[
+      if(gear.minDamage>0)'Dano ${gear.minDamage}–${gear.maxDamage}',
+      if(gear.armor>0)'Armadura ${gear.armor}',
+      if(gear.strength>0)'Força +${gear.strength}',
+      if(gear.dexterity>0)'Destreza +${gear.dexterity}',
+      if(gear.agility>0)'Agilidade +${gear.agility}',
+      if(gear.constitution>0)'Constituição +${gear.constitution}',
     ];
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: gear.color.withValues(alpha: 0.6)),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Image.asset(gear.icon, width: 52, height: 52,
-          filterQuality: FilterQuality.none,
-          errorBuilder: (_, error, stack) =>
-            const Icon(Icons.shield, size: 52)),
-        const SizedBox(width: 10),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(gear.name+(gear.forgeRank>0?
-            ' +'+gear.forgeRank.toString():''), style: TextStyle(
-            color: gear.color, fontWeight: FontWeight.bold)),
-          Text('Nível ' + gear.level.toString() + ' • ' + gear.slot.name,
-            style: const TextStyle(fontSize: 12)),
-          Text(stats.isEmpty ? 'Sem atributos adicionais' : stats.join(' • '),
-            style: const TextStyle(fontSize: 11)),
-          Wrap(spacing: 6, children: [
-            OutlinedButton(onPressed: onPressed, child: Text(action,
-              style: const TextStyle(fontSize: 11))),
-            if (secondary != null)
-              TextButton(onPressed: secondary,
-                child: Text(secondaryLabel ?? 'Vender',
-                  style: const TextStyle(fontSize: 11))),
+    final comparison=current==null?'Espaço vazio':
+      'Vs equipado: dano ${difference(deltaDamage)} · '
+      'defesa ${difference(deltaArmor)} · '
+      'FOR ${difference(deltaStrength)} · DES ${difference(deltaDex)}';
+    return Card(
+      margin:const EdgeInsets.symmetric(vertical:4),
+      color:Palette.panelDeep,
+      shape:RoundedRectangleBorder(
+        side:BorderSide(color:gear.color.withValues(alpha:.7)),
+        borderRadius:BorderRadius.circular(8)),
+      child:Padding(padding:const EdgeInsets.all(10),
+        child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Semantics(label:'${rarityLabel(gear.rarity)}, ${slotLabel(gear.slot)}',
+          child:Image.asset(gear.icon,width:48,height:48,
+            filterQuality:FilterQuality.none,
+            excludeFromSemantics:true,
+            errorBuilder:(_,error,stack)=>const Icon(Icons.shield,size:48))),
+        const SizedBox(width:10),
+        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+          children:[
+          Text(gear.name+(gear.forgeRank>0?' +${gear.forgeRank}':''),
+            style:TextStyle(fontWeight:FontWeight.bold,
+              color:gear.color,fontSize:14)),
+          Text('${rarityLabel(gear.rarity)} · ${slotLabel(gear.slot)}'
+            ' · Nível ${gear.level}',style:const TextStyle(fontSize:12)),
+          if(lines.isNotEmpty)Text(lines.join(' · '),
+            style:const TextStyle(fontSize:12)),
+          Text(comparison,style:const TextStyle(
+            color:Palette.paleGold,fontSize:12)),
+          const SizedBox(height:8),
+          Wrap(spacing:6,runSpacing:4,children:[
+            OutlinedButton(onPressed:onPressed,child:Text(action)),
+            if(secondary!=null)TextButton(
+              onPressed:secondary,child:Text(secondaryLabel??'Vender')),
           ]),
         ])),
-      ]),
+      ])),
     );
   }
 
-  Widget heroPage() => ListView(
-    padding: const EdgeInsets.all(12),
-    children: [
-      panel('Seu gladiador', Column(children: [
-        Center(child: HeroAvatar(equipment: equipped)),
-        Text('GLADIADOR • NÍVEL ' + level.toString(),
-          style: const TextStyle(
-            color: Palette.gold, fontWeight: FontWeight.bold)),
-        Text('Vitórias: ' + wins.toString()),
-        const SizedBox(height: 12),
-        RomanProgress(label: 'VIDA',current:health,
+  Widget heroPage()=>ListView(
+    padding:const EdgeInsets.all(12),children:[
+      panel('Seu gladiador',Column(children:[
+        Semantics(label:'Gladiador de nível $level',
+          child:Center(child:HeroAvatar(equipment:equipped))),
+        Text('GLADIADOR · NÍVEL $level',
+          style:const TextStyle(color:Palette.gold,
+            fontWeight:FontWeight.bold)),
+        Text('Vitórias: $wins'),
+        if(wins>=50)const Text('★ LENDA DA ARENA ★',
+          style:TextStyle(color:Palette.paleGold)),
+        const SizedBox(height:10),
+        RomanProgress(label:'VIDA',current:health,
           maximum:maxHealth,color:Palette.red),
-        const SizedBox(height: 11),
-        RomanProgress(label: 'EXPERIÊNCIA',current:experience,
-          maximum:xpNeeded,color:Palette.gold),
+        const SizedBox(height:10),
+        RomanProgress(label:'EXPERIÊNCIA',
+          current:experience,maximum:xpNeeded,color:Palette.gold),
+        const SizedBox(height:12),
+        Row(children:[
+          Expanded(child:FilledButton.icon(
+            onPressed:openMission,
+            icon:const Icon(Icons.map),label:const Text('MISSÕES'))),
+          const SizedBox(width:6),
+          Expanded(child:OutlinedButton.icon(
+            onPressed:recover,icon:const Icon(Icons.hotel),
+            label:const Text('RECUPERAR'))),
+        ]),
       ])),
-      panel('Atributos • ' + points.toString() + ' pontos disponíveis',
-        Column(children: [
-          stat('Força', strength + bonus((g) => g.strength)),
-          stat('Destreza', dexterity + bonus((g) => g.dexterity)),
-          stat('Agilidade', agility + bonus((g) => g.agility)),
-          stat('Constituição', constitution + bonus((g) => g.constitution)),
-          metric('Poder de ataque', attack.toString()),
-          metric('Armadura', protection.toString()),
-        ])),
-      panel('Equipamentos', Column(
-        children: Slot.values.map((slot) {
-          final gear = equipped[slot];
+      panel('Atributos • $points pontos',Column(children:[
+        stat('Força',strength+bonus((g)=>g.strength),
+          equipmentBonus:bonus((g)=>g.strength)),
+        stat('Destreza',dexterity+bonus((g)=>g.dexterity),
+          equipmentBonus:bonus((g)=>g.dexterity)),
+        stat('Agilidade',agility+bonus((g)=>g.agility),
+          equipmentBonus:bonus((g)=>g.agility)),
+        stat('Constituição',constitution+bonus((g)=>g.constitution),
+          equipmentBonus:bonus((g)=>g.constitution)),
+        const Text('Cada 3 pontos de Força aumentam o dano; '
+          'Destreza melhora acertos; Agilidade melhora esquivas; '
+          'Constituição aumenta a vida.',
+          style:TextStyle(fontSize:12)),
+        metric('Ataque',attack.toString()),
+        metric('Defesa',protection.toString()),
+      ])),
+      panel('Equipamentos',Column(children:[
+        ...Slot.values.map((slot){
+          final gear=equipped[slot];
           return ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Image.asset('assets/sprites/icon_' + slot.name + '.png',
-              width: 36, height: 36, filterQuality: FilterQuality.none,
-              errorBuilder: (_, error, stack) =>
-                const Icon(Icons.shield)),
-            title: Text(gear?.name ?? 'Vazio • ' + slot.name),
-            trailing: gear == null ? null : IconButton(
-              tooltip: 'Retirar equipamento',
-              onPressed: () => removeGear(slot),
-              icon: const Icon(Icons.remove_circle_outline)),
+            dense:true,
+            leading:Image.asset('assets/sprites/icon_${slot.name}.png',
+              width:36,height:36,filterQuality:FilterQuality.none),
+            title:Text(gear?.name??'Vazio'),
+            subtitle:Text(slotLabel(slot)),
+            trailing:gear==null?null:IconButton(
+              tooltip:'Retirar ${slotLabel(slot)}',
+              onPressed:()=>removeGear(slot),
+              icon:const Icon(Icons.remove_circle_outline)),
           );
-        }).toList(),
-      )),
+        }),
+      ])),
     ],
   );
 
