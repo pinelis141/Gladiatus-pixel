@@ -57,7 +57,8 @@ class RomanProgress extends StatelessWidget {
     const SizedBox(height:5),
     ClipRRect(borderRadius: BorderRadius.circular(5),
       child: TweenAnimationBuilder<double>(
-        tween: Tween(begin:0,end: maximum<=0?0:(current/maximum).clamp(0,1)),
+        tween: Tween<double>(begin:0.0,end: maximum<=0?0.0:
+            (current/maximum).clamp(0.0,1.0).toDouble()),
         duration:const Duration(milliseconds:360),
         builder: (context,value,_)=>LinearProgressIndicator(
           value:value,minHeight:9,backgroundColor:Palette.panelDeep,
