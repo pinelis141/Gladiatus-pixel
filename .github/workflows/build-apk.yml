@@ -2,7 +2,7 @@ name: Build Gladiatus APK
 
 on:
   push:
-    branches: [main, master, feature/rpg-romano-v2]
+    branches: [main, master, feature/native-hd-sprites-128x144]
   workflow_dispatch:
 
 permissions:
@@ -27,12 +27,14 @@ jobs:
           python -m pip install --upgrade pip Pillow
           python tools/generate_sprites.py
           python tools/generate_hd_sprites.py
+          python tools/extract_hero_art.py
+          python tools/verify_hero_assets.py
           python tools/generate_audio.py
           python - <<'PY'
           from pathlib import Path
           from PIL import Image
           files = sorted(Path('assets/sprites').glob('*.png'))
-          assert len(files) == 32, f'Sprites encontrados: {len(files)}'
+          assert len(files) == 33, f'Sprites encontrados: {len(files)}'
           for path in files:
               with Image.open(path) as im:
                   im.verify()
@@ -71,6 +73,14 @@ jobs:
 
       - name: Gerar APK release
         run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Publicar prévia HD para revisão visual
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gladiatus-HD-128x144-Preview
+          path: assets/previews/gladiator_comparison.png
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
