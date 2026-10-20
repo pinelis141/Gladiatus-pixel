@@ -52,7 +52,7 @@ class RomanProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     label:'$label: $current de $maximum',
-    value:maximum>0?'\${(current/maximum*100).round()}%':'0%',
+    value:maximum>0?'${(current/maximum*100).round()}%':'0%',
     child:Column(
     crossAxisAlignment:CrossAxisAlignment.start,children: [
     Text('$label $current / $maximum',
