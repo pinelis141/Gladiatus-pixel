@@ -616,7 +616,7 @@ class _GameScreenState extends State<GameScreen> {
   );
 
   Widget gearCard(Gear gear,String action,VoidCallback? onPressed,
-    {VoidCallback? secondary,String? secondaryLabel}){
+    {VoidCallback? secondary,String? secondaryLabel,Gear? upgradePreview}){
     final current=equipped[gear.slot];
     final deltaDamage=gear.maxDamage-(current?.maxDamage??0);
     final deltaArmor=gear.armor-(current?.armor??0);
@@ -660,6 +660,12 @@ class _GameScreenState extends State<GameScreen> {
             style:const TextStyle(fontSize:12)),
           Text(comparison,style:const TextStyle(
             color:Palette.paleGold,fontSize:12)),
+          if(upgradePreview!=null)Text(
+            'Após reforjar: dano ${upgradePreview.minDamage}–'
+            '${upgradePreview.maxDamage}, defesa ${upgradePreview.armor}, '
+            'força ${upgradePreview.strength}.',
+            style:const TextStyle(
+              color:Colors.greenAccent,fontSize:12)),
           const SizedBox(height:8),
           Wrap(spacing:6,runSpacing:4,children:[
             OutlinedButton(onPressed:onPressed,child:Text(action)),
@@ -948,7 +954,8 @@ class _GameScreenState extends State<GameScreen> {
           g.forgeRank>=5?'REFORJA MÁXIMA (+5)':
           'REFORJAR +${g.forgeRank+1} · ${g.forgeCost} ouro',
           g.forgeRank>=5||gold<g.forgeCost?null:
-            ()=>forge(g,fromEquipment:true))),
+            ()=>forge(g,fromEquipment:true),
+          upgradePreview:g.forgeRank<5?g.reforged():null)),
       ])),
       panel('Bolsa',Column(children:[
         if(bag.isEmpty)const Text('Nenhum equipamento na bolsa.'),
@@ -956,7 +963,8 @@ class _GameScreenState extends State<GameScreen> {
           g.forgeRank>=5?'REFORJA MÁXIMA (+5)':
           'REFORJAR +${g.forgeRank+1} · ${g.forgeCost} ouro',
           g.forgeRank>=5||gold<g.forgeCost?null:
-            ()=>forge(g,fromEquipment:false))),
+            ()=>forge(g,fromEquipment:false),
+          upgradePreview:g.forgeRank<5?g.reforged():null)),
       ])),
     ],
   );
