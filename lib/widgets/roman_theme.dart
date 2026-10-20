@@ -7,8 +7,8 @@ class Palette {
   static const gold = Color(0xFFDDB35E);
   static const paleGold = Color(0xFFF4D69B);
   static const cream = Color(0xFFF2E4CB);
-  static const red = Color(0xFFAC3842);
-  static const bronze = Color(0xFF6F4833);
+  static const red = Color(0xFFE7838C);
+  static const bronze = Color(0xFFB58E69);
 }
 
 class RomanPanel extends StatelessWidget {
@@ -50,7 +50,10 @@ class RomanProgress extends StatelessWidget {
   const RomanProgress({super.key,required this.label,required this.current,
     required this.maximum, this.color=Palette.red});
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) => Semantics(
+    label:'$label: $current de $maximum',
+    value:maximum>0?'${(current/maximum*100).round()}%':'0%',
+    child:Column(
     crossAxisAlignment:CrossAxisAlignment.start,children: [
     Text('$label $current / $maximum',
       style:const TextStyle(color:Palette.cream,fontSize:12)),
@@ -66,7 +69,7 @@ class RomanProgress extends StatelessWidget {
         ),
       ),
     ),
-  ]);
+  ]));
 }
 
 class RomanBackdrop extends StatelessWidget {
