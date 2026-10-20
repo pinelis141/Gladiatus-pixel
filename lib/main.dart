@@ -62,6 +62,7 @@ class _GameScreenState extends State<GameScreen> {
   final Set<String> defeatedBosses = {};
   String contractDay = localDayKey(DateTime.now());
   bool isFighting = false;
+  int energyTimestamp=DateTime.now().millisecondsSinceEpoch;
   Future<void> _saveQueue = Future<void>.value();
 
   int bonus(int Function(Gear) f) =>
@@ -87,6 +88,7 @@ class _GameScreenState extends State<GameScreen> {
     bag.clear(); equipped.clear();
     rivalVictories.clear();rivalDefeats.clear(); contracts.clear();
     soundEnabled=true;vibrationEnabled=true;tutorialSeen=false;
+    energyTimestamp=DateTime.now().millisecondsSinceEpoch;
     claimedContracts.clear(); defeatedBosses.clear();
     contractDay=localDayKey(DateTime.now());
     equipped[Slot.weapon] = const Gear(
@@ -122,6 +124,8 @@ class _GameScreenState extends State<GameScreen> {
         experience = max(0, n('experience', 0));
         gold = max(0, n('gold', 300));
         energy = n('energy', 10).clamp(0, 10).toInt();
+        energyTimestamp=n('energyTimestamp',DateTime.now().millisecondsSinceEpoch);
+        rechargeEnergy();
         wins = max(0, n('wins', 0));
         rivalVictories..clear()..addAll(
           (data['rivalVictories'] as Map<String,dynamic>? ?? {})
@@ -196,7 +200,8 @@ class _GameScreenState extends State<GameScreen> {
     if(mounted && saveStatus!='Salvando')setState(()=>saveStatus='Salvando');
     final snapshot = jsonEncode({
       'level': level, 'experience': experience, 'gold': gold,
-      'energy': energy, 'health': health, 'wins': wins, 'points': points,
+      'energy': energy,'energyTimestamp':energyTimestamp,
+      'health': health, 'wins': wins, 'points': points,
       'strength': strength, 'dexterity': dexterity,
       'agility': agility, 'constitution': constitution,
       'rivalVictories': rivalVictories,'rivalDefeats':rivalDefeats,
@@ -279,9 +284,36 @@ class _GameScreenState extends State<GameScreen> {
     unawaited(saveGame());
   }
 
+  void rechargeEnergy(){
+    final now=DateTime.now().millisecondsSinceEpoch;
+    if(energy>=10){energyTimestamp=now;return;}
+    if(now<=energyTimestamp)return;
+    final restored=(now-energyTimestamp)~/1200000;
+    if(restored>0){
+      energy=min(10,energy+restored);
+      energyTimestamp=energy>=10?now:energyTimestamp+restored*1200000;
+    }
+  }
+
+  void replenishEnergy(){
+    rechargeEnergy();
+    if(energy>=10){notice('Energia já está cheia.');return;}
+    const cost=10;
+    if(gold<cost){
+      if(energy==0){
+        setState(()=>energy=1);
+        unawaited(saveGame());
+        notice('Socorro emergencial: 1 energia gratuita.');
+      }else{notice('A recarga de energia custa 10 moedas.');}
+      return;
+    }
+    setState((){gold-=cost;energy++;});
+    unawaited(saveGame());
+  }
+
   void rest() {
-    if(health>=maxHealth&&energy>=10){
-      notice('Você já está totalmente recuperado.');return;
+    if(health>=maxHealth){
+      notice('Saúde já está completa.');return;
     }
     // Emergency recovery prevents softlocks, but free resting while healthy
     // would make combat and the economy consequence-free.
@@ -292,10 +324,10 @@ class _GameScreenState extends State<GameScreen> {
     if (gold < 15) notice('Socorro de emergência gratuito.');
     setState(() {
       if(gold>=15) gold-=15;
-      health=maxHealth;energy=10;
+      health=maxHealth;
     });
     unawaited(saveGame());
-    notice('Vida e energia restauradas!');
+    notice('Vida restaurada! Energia recupera 1 a cada 20 minutos.');
   }
 
   void train(String attribute) {
@@ -358,7 +390,8 @@ class _GameScreenState extends State<GameScreen> {
       notice('Região bloqueada. Suba de nível e derrote o chefe anterior.');
       return;
     }
-    if(energy==0){notice('Sem energia. Descanse na taverna.');return;}
+    rechargeEnergy();
+    if(energy==0){notice('Sem energia. Recarregue na taverna ou aguarde 20 minutos.');return;}
     if(health==0){notice('Ferido. Descanse na taverna.');return;}
     setState((){
       isFighting=true;energy--;
@@ -406,6 +439,7 @@ class _GameScreenState extends State<GameScreen> {
           rivalVictories[enemy.id]=(rivalVictories[enemy.id]??0)+1;
         }
         if(enemy.boss)defeatedBosses.add(enemy.id);
+        if(wins==1)tutorialSeen=true;
         checkLevelUp();
         final guarantee=enemy.id=='wolf' && wins==1;
         if(bag.length<40&&(guarantee || random.nextDouble()<
@@ -646,6 +680,10 @@ class _GameScreenState extends State<GameScreen> {
           style:const TextStyle(color:Palette.gold,
             fontWeight:FontWeight.bold)),
         Text('Vitórias: $wins'),
+        if(!tutorialSeen)const Text(
+          'Seu primeiro objetivo: vença o Lobo Selvagem e receba '
+          'um gládio melhor. Depois equipe-o em Itens.',
+          style:TextStyle(color:Palette.paleGold,fontSize:13)),
         if(wins>=50)const Text('★ LENDA DA ARENA ★',
           style:TextStyle(color:Palette.paleGold)),
         const SizedBox(height:10),
@@ -758,19 +796,23 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget restPanel()=>panel('Taverna',Row(children:[
     const Expanded(child:Text(
-      'Recupere saúde e energia. Custa 15 moedas; '
-      'socorro de emergência é gratuito.',
-      style:TextStyle(fontSize:13))),
-    const SizedBox(width:8),
-    OutlinedButton(onPressed:rest,child:const Text('DESCANSAR')),
+      'Saúde: 15 ouro. Energia: 10 ouro por ponto ou 1 ponto '
+      'a cada 20 minutos. Emergência gratuita se zerar.',
+      style:TextStyle(fontSize:12))),
+    const SizedBox(width:6),
+    Column(mainAxisSize:MainAxisSize.min,children:[
+      OutlinedButton(onPressed:rest,child:const Text('CURAR')),
+      OutlinedButton(onPressed:replenishEnergy,
+        child:const Text('ENERGIA')),
+    ]),
   ]));
 
   Widget missionsPage()=>ListView(
     padding:const EdgeInsets.all(12),children:[
       panel('Próxima expedição',Column(
         crossAxisAlignment:CrossAxisAlignment.start,children:[
-        const Text('Observe a ameaça, prepare seu gladiador e '
-          'enfrente novos desafios. Cada combate gasta 1 energia.'),
+        const Text('Observe a ameaça e prepare seu gladiador. '
+          'Cada combate custa 1 energia; ela recarrega em 20 minutos.'),
         const SizedBox(height:8),
         FilledButton.icon(onPressed:()=>fight(expeditions.first),
           icon:const Icon(Icons.shield),label:const Text('ENFRENTAR O LOBO')),
