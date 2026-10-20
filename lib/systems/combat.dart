@@ -61,7 +61,8 @@ class BattleEngine {
     Random? rng,
   }) : random = rng ?? Random(),
        maxEnemyHealth = 26 + enemy.tier * 11 + playerLevel * 5 +
-           (enemy.boss ? 14 : 0) + min(5, max(0, rivalRank)) * 4 {
+           (enemy.boss ? 14 + max(0, enemy.tier - 3) * 11 : 0) +
+           min(5, max(0, rivalRank)) * 4 {
     playerHealth = startingHealth.clamp(0, maxPlayerHealth).toInt();
     enemyHealth = maxEnemyHealth;
     intent = _nextIntent(0);
