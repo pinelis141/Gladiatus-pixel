@@ -46,6 +46,9 @@ class _GameScreenState extends State<GameScreen> {
   static const saveKey = 'gladiatus_pixel_save_v2';
   final random = Random();
   int page = 0, shopSection = 0, level = 1, experience = 0, gold = 300;
+  String itemFilter = 'Todos';
+  bool soundEnabled=true, vibrationEnabled=true, tutorialSeen=false;
+  String saveStatus='Salvo';
   int energy = 10, health = 100, wins = 0, points = 0;
   int strength = 5, dexterity = 5, agility = 5, constitution = 5;
   bool loading = true;
@@ -53,6 +56,7 @@ class _GameScreenState extends State<GameScreen> {
   final List<Gear> bag = [];
   final List<Gear> shop = [];
   final Map<String,int> rivalVictories = {};
+  final Map<String,int> rivalDefeats = {};
   final Map<String,int> contracts = {};
   final Set<String> claimedContracts = {};
   final Set<String> defeatedBosses = {};
@@ -81,7 +85,8 @@ class _GameScreenState extends State<GameScreen> {
     wins = 0; points = 0;
     strength = 5; dexterity = 5; agility = 5; constitution = 5;
     bag.clear(); equipped.clear();
-    rivalVictories.clear(); contracts.clear();
+    rivalVictories.clear();rivalDefeats.clear(); contracts.clear();
+    soundEnabled=true;vibrationEnabled=true;tutorialSeen=false;
     claimedContracts.clear(); defeatedBosses.clear();
     contractDay=localDayKey(DateTime.now());
     equipped[Slot.weapon] = const Gear(
@@ -121,6 +126,12 @@ class _GameScreenState extends State<GameScreen> {
         rivalVictories..clear()..addAll(
           (data['rivalVictories'] as Map<String,dynamic>? ?? {})
               .map((key,value)=>MapEntry(key,(value as num).toInt())));
+        rivalDefeats..clear()..addAll(
+          (data['rivalDefeats'] as Map<String,dynamic>? ?? {})
+              .map((key,value)=>MapEntry(key,(value as num).toInt())));
+        soundEnabled=data['soundEnabled'] != false;
+        vibrationEnabled=data['vibrationEnabled'] != false;
+        tutorialSeen=data['tutorialSeen'] == true;
         contracts..clear()..addAll(
           (data['contracts'] as Map<String,dynamic>? ?? {})
               .map((key,value)=>MapEntry(key,(value as num).toInt())));
@@ -182,12 +193,15 @@ class _GameScreenState extends State<GameScreen> {
   // Serialize writes so a slow older save cannot overwrite a newer one.
   // Snapshot the state before scheduling the write.
   Future<void> saveGame() {
+    if(mounted && saveStatus!='Salvando')setState(()=>saveStatus='Salvando');
     final snapshot = jsonEncode({
       'level': level, 'experience': experience, 'gold': gold,
       'energy': energy, 'health': health, 'wins': wins, 'points': points,
       'strength': strength, 'dexterity': dexterity,
       'agility': agility, 'constitution': constitution,
-      'rivalVictories': rivalVictories, 'contracts': contracts,
+      'rivalVictories': rivalVictories,'rivalDefeats':rivalDefeats,
+      'soundEnabled':soundEnabled,'vibrationEnabled':vibrationEnabled,
+      'tutorialSeen':tutorialSeen, 'contracts': contracts,
       'claimedContracts': claimedContracts.toList(),
       'defeatedBosses': defeatedBosses.toList(), 'contractDay': contractDay,
       'equipped': equipped.values.map((g) => g.toJson()).toList(),
@@ -199,8 +213,12 @@ class _GameScreenState extends State<GameScreen> {
         final prefs = await SharedPreferences.getInstance();
         final stored = await prefs.setString(saveKey, snapshot);
         if (!stored) throw StateError('Persistência recusada');
+        if(mounted)setState(()=>saveStatus='Salvo');
       } catch (_) {
-        if (mounted) notice('Falha ao salvar. Tente novamente.');
+        if (mounted){
+          setState(()=>saveStatus='Erro ao salvar');
+          notice('Falha ao salvar. Tente novamente.');
+        }
       }
     });
     return _saveQueue;
@@ -354,7 +372,9 @@ class _GameScreenState extends State<GameScreen> {
           evasion:dodgeChance,protection:protection,
           minWeapon:weapon?.minDamage??3,
           maxWeapon:weapon?.maxDamage??6,
-          rivalRank:rivalVictories[enemy.id]??0,
+          rivalRank:max(0,(rivalVictories[enemy.id]??0)-
+            (rivalDefeats[enemy.id]??0)),
+          soundEnabled:soundEnabled,vibrationEnabled:vibrationEnabled,
         )),
       );
     } finally {
@@ -368,10 +388,11 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     String? drop;
-    final reward=outcome.won?22+enemy.tier*13+
-      (enemy.boss?110:0)+random.nextInt(15):0;
-    final gainedXp=outcome.won?15+enemy.tier*9+
-      (enemy.boss?65:0):0;
+    final firstBossWin=enemy.boss&&!defeatedBosses.contains(enemy.id);
+    final reward=outcome.won ? 22+enemy.tier*13+
+      (firstBossWin?110:0)+random.nextInt(15):0;
+    final gainedXp=outcome.won ? 15+enemy.tier*9+
+      (firstBossWin?65:0):0;
     setState((){
       health=outcome!.remainingHealth;
       if(outcome.won) {
@@ -383,11 +404,18 @@ class _GameScreenState extends State<GameScreen> {
         }
         if(enemy.boss)defeatedBosses.add(enemy.id);
         checkLevelUp();
-        if(bag.length<40 && random.nextDouble()<
-            (enemy.boss ? .85 : .40)) {
-          final loot=GearFactory.create(level);
+        final guarantee=enemy.id=='wolf' && wins==1;
+        if(bag.length<40&&(guarantee || random.nextDouble()<
+            (firstBossWin?.85:.40))) {
+          final loot=guarantee?
+              Gear(id:'first_upgrade',name:'Gládio do Recruta',
+                slot:Slot.weapon,rarity:Rarity.green,level:1,
+                price:90,minDamage:7,maxDamage:12,strength:1):
+              GearFactory.create(level);
           bag.add(loot);drop=loot.name;
         }
+      } else if(enemy.arena){
+        rivalDefeats[enemy.id]=(rivalDefeats[enemy.id]??0)+1;
       }
     });
     unawaited(saveGame());
