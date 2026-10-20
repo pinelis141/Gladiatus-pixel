@@ -337,7 +337,7 @@ class _GameScreenState extends State<GameScreen> {
         if(enemy.boss)defeatedBosses.add(enemy.id);
         checkLevelUp();
         if(bag.length<40 && random.nextDouble()<
-            (enemy.boss?.85:.40)) {
+            (enemy.boss ? .85 : .40)) {
           final loot=GearFactory.create(level);
           bag.add(loot);drop=loot.name;
         }
@@ -435,7 +435,8 @@ class _GameScreenState extends State<GameScreen> {
         const SizedBox(width: 10),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(gear.name, style: TextStyle(
+          Text(gear.name+(gear.forgeRank>0?
+            ' +'+gear.forgeRank.toString():''), style: TextStyle(
             color: gear.color, fontWeight: FontWeight.bold)),
           Text('Nível ' + gear.level.toString() + ' • ' + gear.slot.name,
             style: const TextStyle(fontSize: 12)),
@@ -503,57 +504,109 @@ class _GameScreenState extends State<GameScreen> {
     ],
   );
 
-  Widget opponent(String name, String image, int difficulty,
-    String description) => panel(name, Row(children: [
-      Sprite(image, width: 94, height: 94),
-      const SizedBox(width: 12),
-      Expanded(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(description),
-        Text('Dificuldade ' + difficulty.toString() + '/5',
-          style: const TextStyle(color: Palette.gold)),
-        const SizedBox(height: 8),
+  Widget opponent(EnemySpec enemy){
+    final available=accessible(enemy);
+    final rivalry=rivalVictories[enemy.id]??0;
+    return panel(enemy.name,Row(children:[
+      Sprite(enemy.sprite,width:95,height:110),
+      const SizedBox(width:10),
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+        children:[
+        Text(enemy.description,style:const TextStyle(fontSize:12)),
+        const SizedBox(height:4),
+        Text('Força: '+enemy.tier.toString()+
+          ' • Nível mínimo '+enemy.minLevel.toString(),
+          style:const TextStyle(color:Palette.gold,fontSize:12)),
+        if(enemy.boss)const Text('★ CHEFE',style:TextStyle(
+          color:Palette.paleGold,fontWeight:FontWeight.bold)),
+        if(defeatedBosses.contains(enemy.id))
+          const Text('✓ Vencido',style:TextStyle(color:Colors.green)),
+        if(enemy.arena)Text('Rivalidade '+rivalry.toString(),
+          style:const TextStyle(fontSize:11)),
+        const SizedBox(height:6),
         ElevatedButton(
-          onPressed: () => fight(name, image, difficulty),
-          child: const Text('COMBATER')),
+          onPressed:available&&!isFighting?()=>fight(enemy):null,
+          child:Text(available?'COMBATER':'BLOQUEADO')),
       ])),
     ]));
+  }
+
+  Widget contractsPanel() {
+    dailyResetIfNeeded();
+    return panel('Contratos diários',Column(children:[
+      const Text('Renovação a cada dia local. Conclua objetivos '
+        'para resgatar ouro e experiência.',
+        style:TextStyle(fontSize:11)),
+      const SizedBox(height:9),
+      ...dailyContracts.map((contract){
+        final progress=contracts[contract.id]??0;
+        final finished=claimedContracts.contains(contract.id);
+        return Padding(padding:const EdgeInsets.only(bottom:12),
+          child:Row(children:[
+            Expanded(child:Column(
+              crossAxisAlignment:CrossAxisAlignment.start,
+              children:[
+                Text(contract.title,style:const TextStyle(
+                  color:Palette.gold,fontWeight:FontWeight.bold)),
+                Text(contract.description,
+                  style:const TextStyle(fontSize:11)),
+                Text(progress.toString()+'/'+contract.target.toString()+
+                  ' • +'+contract.gold.toString()+' ouro',
+                  style:const TextStyle(fontSize:11)),
+              ])),
+            TextButton(
+              onPressed:finished||progress<contract.target?null:
+                 ()=>claimContract(contract),
+              child:Text(finished?'RESGATADO':'RESGATAR')),
+          ]),
+        );
+      }),
+    ]));
+  }
 
   Widget missionsPage() => ListView(
-    padding: const EdgeInsets.all(12),
-    children: [
-      panel('Expedições', const Text(
-        'Enfrente inimigos para ganhar ouro, experiência e itens. '
-        'Cada luta consome 1 energia.')),
-      opponent('Lobo da Floresta', 'enemy_wolf', 1,
-        'Predador à espreita nas estradas.'),
-      opponent('Pirata do Porto', 'enemy_pirate', 2,
-        'Saqueador das rotas comerciais.'),
-      opponent('Minotauro', 'enemy_minotaur', 4,
-        'Uma fera poderosa. Prepare-se!'),
-      panel('Taverna', Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Restaure vida e energia por 15 moedas.'),
-        const SizedBox(height: 8),
-        ElevatedButton.icon(
-          onPressed: rest,
-          icon: const Icon(Icons.hotel),
-          label: const Text('DESCANSAR • 15 OURO')),
+    padding:const EdgeInsets.all(12),
+    children:[
+      panel('Mapa das expedições',const Text(
+        'Enfrente inimigos, desbloqueie regiões derrotando chefes '
+        'e conquiste recompensas especiais. Cada luta custa 1 energia.')),
+      ...regions.entries.map((region)=>Column(
+        crossAxisAlignment:CrossAxisAlignment.start,children:[
+          panel(region.key,Column(
+            crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(region.value),
+            const SizedBox(height:10),
+            Sprite(
+              region.key=='Campânia'?'scene_forest':
+              region.key=='Porto de Óstia'?'scene_port':'scene_ruins',
+              width:double.infinity,height:110),
+          ])),
+          ...expeditions.where((e)=>e.region==region.key).map(opponent),
+        ])),
+      contractsPanel(),
+      panel('Taverna',Column(
+        crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('Restaure sua saúde e energia por 15 moedas. '
+          'Se estiver sem ouro, os médicos da arena oferecem '
+          'socorro gratuito para evitar que sua jornada trave.'),
+        const SizedBox(height:8),
+        ElevatedButton.icon(onPressed:rest,icon:const Icon(Icons.hotel),
+          label:const Text('DESCANSAR')),
       ])),
     ],
   );
 
-  Widget arenaPage() => ListView(
-    padding: const EdgeInsets.all(12),
-    children: [
-      panel('Arena Romana', const Text(
-        'Desafie rivais controlados pelo jogo e prove o seu valor.')),
-      opponent('Recruta da Arena', 'enemy_gladiator', 2,
-        'Adversário em início de carreira.'),
-      opponent('Veterano Pretoriano', 'enemy_gladiator', 3,
-        'Treinado nas legiões romanas.'),
-      opponent('Campeão do Coliseu', 'enemy_gladiator', 5,
-        'Desafio reservado aos mais fortes.'),
+  Widget arenaPage()=>ListView(
+    padding:const EdgeInsets.all(12),
+    children:[
+      panel('Rivais do Coliseu',const Text(
+        'Os adversários guardam memória das suas vitórias. '
+        'Cada revanche aumenta sua força e sua vida. '
+        'Enfrente-os para construir sua reputação.')),
+      ...arenaRivals.map(opponent),
+      panel('Cartaz de vitórias',Text('Você venceu '+wins.toString()+
+        ' lutas. Alcance 50 vitórias para se tornar '
+        'uma lenda das arenas.')),
     ],
   );
 
@@ -591,6 +644,28 @@ class _GameScreenState extends State<GameScreen> {
     ],
   );
 
+  Widget forgePage()=>ListView(
+    padding:const EdgeInsets.all(12),
+    children:[
+      panel('Oficina do ferreiro',const Text(
+        'Reforce armas, escudos, armaduras e acessórios '
+        'até +5. Cada etapa custa ouro e melhora os atributos.')),
+      panel('Equipados',Column(children:
+        equipped.values.map((gear)=>gearCard(
+          gear,'Reforjar +'+(gear.forgeRank+1).toString()+
+            ' • '+gear.forgeCost.toString()+' ouro',
+          ()=>forge(gear,fromEquipment:true),
+        )).toList())),
+      panel('Itens na bolsa',bag.isEmpty
+        ?const Text('Sua bolsa está vazia.')
+        :Column(children:bag.map((gear)=>gearCard(
+          gear,'Reforjar +'+(gear.forgeRank+1).toString()+
+          ' • '+gear.forgeCost.toString()+' ouro',
+          ()=>forge(gear,fromEquipment:false),
+        )).toList())),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -623,7 +698,7 @@ class _GameScreenState extends State<GameScreen> {
       ? const Center(child: CircularProgressIndicator())
       : IndexedStack(index: page, children: [
           heroPage(), missionsPage(), arenaPage(),
-          inventoryPage(), marketPage(),
+          inventoryPage(), marketPage(), forgePage(),
         ]),
     bottomNavigationBar: NavigationBar(
       height: 72,
@@ -636,6 +711,7 @@ class _GameScreenState extends State<GameScreen> {
         NavigationDestination(icon: Icon(Icons.shield), label: 'Arena'),
         NavigationDestination(icon: Icon(Icons.backpack), label: 'Itens'),
         NavigationDestination(icon: Icon(Icons.storefront), label: 'Mercado'),
+        NavigationDestination(icon: Icon(Icons.hardware), label: 'Forja'),
       ],
     ),
   );
