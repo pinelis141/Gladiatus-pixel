@@ -989,26 +989,26 @@ class _GameScreenState extends State<GameScreen> {
           onPressed:showPreferences,
           icon:const Icon(Icons.settings_outlined)),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(32),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
-          child: Row(children: [
-            Expanded(child: Text('NV ' + level.toString() +
-              ' • OURO ' + gold.toString(),
-              style: const TextStyle(color: Palette.gold))),
-            Text('❤ ' + health.toString() + '/' + maxHealth.toString() +
-              '  ⚡ ' + energy.toString() + '/10',
-              style: const TextStyle(fontSize: 12)),
-          ]),
-        ),
-      ),
     ),
     body: loading
-      ? const Center(child: CircularProgressIndicator())
-      : IndexedStack(index: page, children: [
-          heroPage(), missionsPage(), arenaPage(),
-          inventoryPage(), shopSection==0?marketPage():forgePage(),
+      ? const Center(child:CircularProgressIndicator())
+      : Column(children:[
+          Container(
+            color:Palette.panel,
+            padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),
+            child:Row(children:[
+              Expanded(child:Text('NV $level • OURO $gold',
+                overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Palette.gold,fontSize:13))),
+              const SizedBox(width:8),
+              Text('❤ $health/$maxHealth   ⚡ $energy/10',
+                style:const TextStyle(fontSize:12)),
+            ]),
+          ),
+          Expanded(child:IndexedStack(index:page,children:[
+            heroPage(),missionsPage(),arenaPage(),inventoryPage(),
+            shopSection==0?marketPage():forgePage(),
+          ])),
         ]),
     bottomNavigationBar: NavigationBar(
       height: 84,
