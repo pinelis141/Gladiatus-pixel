@@ -3,18 +3,16 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'models/gear.dart';
+import 'systems/combat.dart';
+import 'systems/content.dart';
+import 'screens/battle_screen.dart';
+import 'widgets/roman_theme.dart';
+import 'widgets/pixel_avatar.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const GladiatusApp());
-}
-
-class Palette {
-  static const dark = Color(0xFF1A120B);
-  static const panel = Color(0xFF2C1E14);
-  static const gold = Color(0xFFC59B27);
-  static const cream = Color(0xFFF4E7D3);
-  static const red = Color(0xFF9F3234);
 }
 
 class GladiatusApp extends StatelessWidget {
@@ -38,152 +36,6 @@ class GladiatusApp extends StatelessWidget {
   );
 }
 
-enum Slot { weapon, shield, helmet, armor, gloves, boots, ring, amulet }
-enum Rarity { common, green, blue, purple, orange }
-
-class Gear {
-  final String id;
-  final String name;
-  final Slot slot;
-  final Rarity rarity;
-  final int level;
-  final int minDamage;
-  final int maxDamage;
-  final int armor;
-  final int strength;
-  final int dexterity;
-  final int agility;
-  final int constitution;
-  final int price;
-
-  const Gear({
-    required this.id, required this.name, required this.slot,
-    required this.rarity, required this.level, required this.price,
-    this.minDamage = 0, this.maxDamage = 0, this.armor = 0,
-    this.strength = 0, this.dexterity = 0, this.agility = 0,
-    this.constitution = 0,
-  });
-
-  Color get color => [
-    const Color(0xFFD9D9D9), const Color(0xFF80D782),
-    const Color(0xFF70B9FC), const Color(0xFFC18CF8),
-    const Color(0xFFFFB36A),
-  ][rarity.index];
-
-  String get icon => 'assets/sprites/icon_' + slot.name + '.png';
-
-  Map<String, dynamic> toJson() => {
-    'id': id, 'name': name, 'slot': slot.index, 'rarity': rarity.index,
-    'level': level, 'price': price, 'minDamage': minDamage,
-    'maxDamage': maxDamage, 'armor': armor, 'strength': strength,
-    'dexterity': dexterity, 'agility': agility, 'constitution': constitution,
-  };
-
-  factory Gear.fromJson(Map<String, dynamic> j) {
-    int n(String key, [int fallback = 0]) => (j[key] as num?)?.toInt() ?? fallback;
-    return Gear(
-      id: (j['id'] ?? '').toString(),
-      name: (j['name'] ?? 'Item').toString(),
-      slot: Slot.values[n('slot').clamp(0, Slot.values.length - 1).toInt()],
-      rarity: Rarity.values[n('rarity').clamp(0, Rarity.values.length - 1).toInt()],
-      level: max(1, n('level', 1)), price: max(1, n('price', 10)),
-      minDamage: n('minDamage'), maxDamage: n('maxDamage'),
-      armor: n('armor'), strength: n('strength'),
-      dexterity: n('dexterity'), agility: n('agility'),
-      constitution: n('constitution'),
-    );
-  }
-}
-
-class GearFactory {
-  static final random = Random();
-  static int serial = 0;
-  static const names = <Slot, List<String>>{
-    Slot.weapon: ['Gládio Curto', 'Tridente', 'Espada Larga', 'Machado'],
-    Slot.shield: ['Parma de Madeira', 'Scutum Romano', 'Égide'],
-    Slot.helmet: ['Gálea de Couro', 'Elmo Murmillo', 'Elmo Trácio'],
-    Slot.armor: ['Túnica de Linho', 'Lorica Segmentata', 'Couraça'],
-    Slot.gloves: ['Luvas de Combate', 'Manica de Couro'],
-    Slot.boots: ['Caligae Romanas', 'Grevas de Bronze'],
-    Slot.ring: ['Anel de Cobre', 'Anel de Rubi'],
-    Slot.amulet: ['Talismã de Marte', 'Insígnia da Águia'],
-  };
-  static const titles = [
-    'do Recruta', 'do Centurião', 'de Marte',
-    'do Coliseu', 'do Imperador', 'da Vitória',
-  ];
-
-  static Gear create(int level) {
-    final slot = Slot.values[random.nextInt(Slot.values.length)];
-    final roll = random.nextDouble();
-    final rarity = roll < .40 ? Rarity.common
-      : roll < .70 ? Rarity.green : roll < .87 ? Rarity.blue
-      : roll < .97 ? Rarity.purple : Rarity.orange;
-    final itemLevel = max(1, level + random.nextInt(3) - 1);
-    final factor = 1.0 + rarity.index * .45;
-    final base = names[slot]!;
-    final title = base[random.nextInt(base.length)];
-    final name = rarity == Rarity.common ? title :
-      title + ' ' + titles[random.nextInt(titles.length)];
-    final isWeapon = slot == Slot.weapon;
-    final isArmor = slot == Slot.helmet || slot == Slot.armor ||
-      slot == Slot.shield || slot == Slot.gloves || slot == Slot.boots;
-    final bonus = max(1, (itemLevel * factor).round());
-    return Gear(
-      id: DateTime.now().microsecondsSinceEpoch.toString() +
-        '_' + (serial++).toString() + '_' + random.nextInt(9999).toString(),
-      name: name, slot: slot, rarity: rarity, level: itemLevel,
-      price: ((30 + itemLevel * 35) * factor).round(),
-      minDamage: isWeapon ? ((2 + itemLevel * 2) * factor).round() : 0,
-      maxDamage: isWeapon ? ((5 + itemLevel * 3.5) * factor).round() : 0,
-      armor: isArmor ? ((7 + itemLevel * 15) * factor).round() : 0,
-      strength: random.nextBool() ? random.nextInt(bonus + 1) : 0,
-      dexterity: random.nextBool() ? random.nextInt(bonus + 1) : 0,
-      agility: random.nextBool() ? random.nextInt(bonus + 1) : 0,
-      constitution: random.nextBool() ? random.nextInt(bonus + 1) : 0,
-    );
-  }
-}
-
-class Sprite extends StatelessWidget {
-  final String name;
-  final double width;
-  final double height;
-  const Sprite(this.name, {super.key, required this.width, required this.height});
-  @override
-  Widget build(BuildContext context) => Image.asset(
-    'assets/sprites/' + name + '.png',
-    width: width, height: height, fit: BoxFit.fill,
-    filterQuality: FilterQuality.none,
-    errorBuilder: (context, error, stack) => Container(
-      width: width, height: height,
-      alignment: Alignment.center,
-      color: Palette.panel,
-      child: const Icon(Icons.shield, color: Palette.gold),
-    ),
-  );
-}
-
-class HeroAvatar extends StatelessWidget {
-  final Map<Slot, Gear> equipment;
-  const HeroAvatar({super.key, required this.equipment});
-  @override
-  Widget build(BuildContext context) {
-    final assets = <String>['gladiator_base'];
-    for (final slot in [Slot.armor, Slot.helmet, Slot.weapon, Slot.shield]) {
-      if (equipment.containsKey(slot)) assets.add('equip_' + slot.name);
-    }
-    return SizedBox(
-      width: 176, height: 198,
-      child: Stack(
-        children: assets.map((path) => Positioned.fill(
-          child: Sprite(path, width: 176, height: 198),
-        )).toList(),
-      ),
-    );
-  }
-}
-
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
   @override
@@ -193,13 +45,19 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   static const saveKey = 'gladiatus_pixel_save_v2';
   final random = Random();
-  int page = 0, level = 1, experience = 0, gold = 300;
+  int page = 0, shopSection = 0, level = 1, experience = 0, gold = 300;
   int energy = 10, health = 100, wins = 0, points = 0;
   int strength = 5, dexterity = 5, agility = 5, constitution = 5;
   bool loading = true;
   final Map<Slot, Gear> equipped = {};
   final List<Gear> bag = [];
   final List<Gear> shop = [];
+  final Map<String,int> rivalVictories = {};
+  final Map<String,int> contracts = {};
+  final Set<String> claimedContracts = {};
+  final Set<String> defeatedBosses = {};
+  String contractDay = localDayKey(DateTime.now());
+  bool isFighting = false;
 
   int bonus(int Function(Gear) f) =>
     equipped.values.fold<int>(0, (sum, gear) => sum + f(gear));
@@ -222,6 +80,9 @@ class _GameScreenState extends State<GameScreen> {
     wins = 0; points = 0;
     strength = 5; dexterity = 5; agility = 5; constitution = 5;
     bag.clear(); equipped.clear();
+    rivalVictories.clear(); contracts.clear();
+    claimedContracts.clear(); defeatedBosses.clear();
+    contractDay=localDayKey(DateTime.now());
     equipped[Slot.weapon] = const Gear(
       id: 'initial_gladius', name: 'Gládio de Treino',
       slot: Slot.weapon, rarity: Rarity.common, level: 1,
@@ -252,6 +113,21 @@ class _GameScreenState extends State<GameScreen> {
         gold = max(0, n('gold', 300));
         energy = n('energy', 10).clamp(0, 10).toInt();
         wins = max(0, n('wins', 0));
+        rivalVictories..clear()..addAll(
+          (data['rivalVictories'] as Map<String,dynamic>? ?? {})
+              .map((key,value)=>MapEntry(key,(value as num).toInt())));
+        contracts..clear()..addAll(
+          (data['contracts'] as Map<String,dynamic>? ?? {})
+              .map((key,value)=>MapEntry(key,(value as num).toInt())));
+        claimedContracts..clear()..addAll(
+          (data['claimedContracts'] as List<dynamic>? ?? []).cast<String>());
+        defeatedBosses..clear()..addAll(
+          (data['defeatedBosses'] as List<dynamic>? ?? []).cast<String>());
+        contractDay=(data['contractDay'] ?? localDayKey(DateTime.now())).toString();
+        if(contractDay!=localDayKey(DateTime.now())) {
+          contracts.clear(); claimedContracts.clear();
+          contractDay=localDayKey(DateTime.now());
+        }
         points = max(0, n('points', 0));
         strength = max(1, n('strength', 5));
         dexterity = max(1, n('dexterity', 5));
@@ -281,6 +157,9 @@ class _GameScreenState extends State<GameScreen> {
       'energy': energy, 'health': health, 'wins': wins, 'points': points,
       'strength': strength, 'dexterity': dexterity,
       'agility': agility, 'constitution': constitution,
+      'rivalVictories':rivalVictories, 'contracts':contracts,
+      'claimedContracts':claimedContracts.toList(),
+      'defeatedBosses':defeatedBosses.toList(), 'contractDay':contractDay,
       'equipped': equipped.values.map((g) => g.toJson()).toList(),
       'bag': bag.map((g) => g.toJson()).toList(),
     };
@@ -348,9 +227,10 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void rest() {
-    if (gold < 15) { notice('Precisa de 15 moedas.'); return; }
+    if (gold < 15) notice('A taverna concede socorro gratuito ao gladiador.');
     setState(() {
-      gold -= 15; health = maxHealth; energy = 10;
+      if(gold>=15) gold-=15;
+      health=maxHealth;energy=10;
     });
     unawaited(saveGame());
     notice('Vida e energia restauradas!');
@@ -370,95 +250,145 @@ class _GameScreenState extends State<GameScreen> {
     unawaited(saveGame());
   }
 
-  void fight(String name, String sprite, int difficulty) {
-    if (energy == 0) { notice('Sem energia. Visite a taverna.'); return; }
-    if (health == 0) { notice('Ferido. Visite a taverna.'); return; }
-    final weapon = equipped[Slot.weapon];
-    final lower = weapon?.minDamage ?? 3;
-    final upper = max(lower, weapon?.maxDamage ?? 6);
-    var enemyHp = 18 + difficulty * 17 + level * 6;
-    var myHp = health, rounds = 0, damageDone = 0, damageTaken = 0;
-    while (myHp > 0 && enemyHp > 0 && rounds < 30) {
-      rounds++;
-      if (random.nextInt(100) < min(94, 70 + hitChance - difficulty * 2)) {
-        final damage = lower + random.nextInt(upper - lower + 1) +
-          attack ~/ 3;
-        enemyHp -= damage;
-        damageDone += damage;
-      }
-      if (enemyHp <= 0) break;
-      if (random.nextInt(100) >= min(35, dodgeChance)) {
-        final damage = max(1, 3 + difficulty * 3 + level +
-          random.nextInt(7) - protection ~/ 35);
-        myHp -= damage;
-        damageTaken += damage;
-      }
+  void dailyResetIfNeeded(){
+    final today=localDayKey(DateTime.now());
+    if(contractDay!=today) {
+      contracts.clear();claimedContracts.clear();contractDay=today;
     }
-    final won = enemyHp <= 0;
-    final reward = won ? 15 + difficulty * 12 + random.nextInt(16) : 0;
-    final earnedXp = won ? 12 + difficulty * 9 : 0;
+  }
+
+  void progressContract(String type){
+    dailyResetIfNeeded();
+    contracts[type]=(contracts[type]??0)+1;
+  }
+
+  void checkLevelUp(){
+    while(experience>=xpNeeded) {
+      experience-=xpNeeded;level++;points+=3;health=maxHealth;
+    }
+  }
+
+  void claimContract(Contract contract){
+    dailyResetIfNeeded();
+    if((contracts[contract.id]??0)<contract.target ||
+        claimedContracts.contains(contract.id)) return;
+    setState((){
+      claimedContracts.add(contract.id);
+      gold+=contract.gold;experience+=contract.xp;checkLevelUp();
+    });
+    unawaited(saveGame());
+    notice('Contrato: +' + contract.gold.toString() +
+      ' ouro e +' + contract.xp.toString() + ' XP.');
+  }
+
+  bool accessible(EnemySpec opponent){
+    if(level<opponent.minLevel)return false;
+    if(opponent.region=='Porto de Óstia' &&
+       !defeatedBosses.contains('forest_boss'))return false;
+    if(opponent.region=='Ruínas de Vulcano' &&
+       !defeatedBosses.contains('port_boss'))return false;
+    return true;
+  }
+
+  Future<void> fight(EnemySpec enemy) async {
+    if(isFighting)return;
+    if(!accessible(enemy)) {
+      notice('Região bloqueada. Suba de nível e derrote o chefe anterior.');
+      return;
+    }
+    if(energy==0){notice('Sem energia. Descanse na taverna.');return;}
+    if(health==0){notice('Ferido. Descanse na taverna.');return;}
+    setState((){
+      isFighting=true;energy--;
+    });
+    unawaited(saveGame());
+    final weapon=equipped[Slot.weapon];
+    BattleOutcome? outcome;
+    try {
+      outcome=await Navigator.of(context).push<BattleOutcome>(
+        MaterialPageRoute(builder: (_)=>BattleScreen(
+          enemy:enemy,equipment:Map<Slot,Gear>.from(equipped),
+          startingHealth:health,maxHealth:maxHealth,
+          playerLevel:level,power:attack,accuracy:hitChance,
+          evasion:dodgeChance,protection:protection,
+          minWeapon:weapon?.minDamage??3,
+          maxWeapon:weapon?.maxDamage??6,
+          rivalRank:rivalVictories[enemy.id]??0,
+        )),
+      );
+    } finally {
+      isFighting=false;
+    }
+    if(outcome==null||!mounted)return;
     String? drop;
-    setState(() {
-      energy--; health = max(0, myHp);
-      if (won) {
-        wins++; gold += reward; experience += earnedXp;
-        while (experience >= xpNeeded) {
-          experience -= xpNeeded;
-          level++; points += 3; health = maxHealth;
+    final reward=outcome.won?22+enemy.tier*13+
+      (enemy.boss?110:0)+random.nextInt(15):0;
+    final gainedXp=outcome.won?15+enemy.tier*9+
+      (enemy.boss?65:0):0;
+    setState((){
+      health=outcome!.remainingHealth;
+      if(outcome.won) {
+        wins++;gold+=reward;experience+=gainedXp;
+        progressContract('victories');
+        progressContract(enemy.arena?'arena':'expedition');
+        if(enemy.arena) {
+          rivalVictories[enemy.id]=(rivalVictories[enemy.id]??0)+1;
         }
-        if (bag.length < 40 && random.nextDouble() < .35) {
-          final loot = GearFactory.create(level);
-          bag.add(loot);
-          drop = loot.name;
+        if(enemy.boss)defeatedBosses.add(enemy.id);
+        checkLevelUp();
+        if(bag.length<40 && random.nextDouble()<
+            (enemy.boss ? .85 : .40)) {
+          final loot=GearFactory.create(level);
+          bag.add(loot);drop=loot.name;
         }
       }
     });
     unawaited(saveGame());
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Palette.panel,
-        title: Text(won ? 'Vitória: ' + name : 'Derrota: ' + name),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Sprite(sprite, width: 100, height: 100),
-          const SizedBox(height: 12),
-          Text('Rodadas: ' + rounds.toString() +
-            ' • Dano causado: ' + damageDone.toString() +
-            ' • Recebido: ' + damageTaken.toString(),
-            textAlign: TextAlign.center),
-          if (won) Text('+' + reward.toString() + ' ouro • +' +
-            earnedXp.toString() + ' XP'),
-          if (drop != null) Text('Espólio: ' + drop!,
-            textAlign: TextAlign.center),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CONTINUAR')),
-        ],
-      ),
-    );
+    if(!mounted)return;
+    showDialog<void>(context:context,builder:(context)=>AlertDialog(
+      backgroundColor:Palette.panel,
+      title:Text(outcome!.won?'Triunfo romano':'Derrota'),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        Text(enemy.name),
+        Text('Rodadas: '+outcome.turns.toString()),
+        Text(outcome.won?'+'+reward.toString()+' ouro • +'+
+          gainedXp.toString()+' XP':'Tente novamente.'),
+        if(drop!=null)Text('Espólio: '+drop!),
+        if(enemy.arena&&outcome.won)
+          Text('Rivalidade '+(rivalVictories[enemy.id]??0).toString()),
+        if(enemy.boss&&outcome.won)
+          const Text('Uma nova região foi desbloqueada!'),
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(context),
+        child:const Text('CONTINUAR'))],
+    ));
   }
 
-  Widget panel(String heading, Widget child) => Container(
-    width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Palette.panel,
-      border: Border.all(color: Palette.gold.withValues(alpha: 0.6)),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(heading.toUpperCase(), style: const TextStyle(
-          color: Palette.gold, fontWeight: FontWeight.bold, fontSize: 15)),
-        const SizedBox(height: 10),
-        child,
-      ],
-    ),
+  void forge(Gear gear,{required bool fromEquipment}){
+    final existing=fromEquipment?equipped[gear.slot]:
+      (bag.where((g)=>g.id==gear.id).isEmpty?null:
+       bag.firstWhere((g)=>g.id==gear.id));
+    if(existing==null||existing.id!=gear.id)return;
+    if(gear.forgeRank>=5){notice('Reforja máxima alcançada.');return;}
+    if(gold<gear.forgeCost){notice('Ouro insuficiente.');return;}
+    final upgrade=gear.reforged();
+    setState((){
+      gold-=gear.forgeCost;
+      if(fromEquipment){equipped[gear.slot]=upgrade;}
+      else {
+        final i=bag.indexWhere((g)=>g.id==gear.id);
+        if(i>=0)bag[i]=upgrade;
+      }
+      progressContract('forge');
+      health=min(health,maxHealth);
+    });
+    unawaited(saveGame());
+    notice('Ferreiro concluiu o reforço +'+upgrade.forgeRank.toString()+'.');
+  }
+
+  Widget panel(String heading,Widget child)=>Padding(
+    padding:const EdgeInsets.only(bottom:12),
+    child:RomanPanel(title:heading,child:child),
   );
 
   Widget metric(String name, String value) => Padding(
@@ -505,7 +435,8 @@ class _GameScreenState extends State<GameScreen> {
         const SizedBox(width: 10),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(gear.name, style: TextStyle(
+          Text(gear.name+(gear.forgeRank>0?
+            ' +'+gear.forgeRank.toString():''), style: TextStyle(
             color: gear.color, fontWeight: FontWeight.bold)),
           Text('Nível ' + gear.level.toString() + ' • ' + gear.slot.name,
             style: const TextStyle(fontSize: 12)),
@@ -573,57 +504,109 @@ class _GameScreenState extends State<GameScreen> {
     ],
   );
 
-  Widget opponent(String name, String image, int difficulty,
-    String description) => panel(name, Row(children: [
-      Sprite(image, width: 94, height: 94),
-      const SizedBox(width: 12),
-      Expanded(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(description),
-        Text('Dificuldade ' + difficulty.toString() + '/5',
-          style: const TextStyle(color: Palette.gold)),
-        const SizedBox(height: 8),
+  Widget opponent(EnemySpec enemy){
+    final available=accessible(enemy);
+    final rivalry=rivalVictories[enemy.id]??0;
+    return panel(enemy.name,Row(children:[
+      Sprite(enemy.sprite,width:95,height:110),
+      const SizedBox(width:10),
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+        children:[
+        Text(enemy.description,style:const TextStyle(fontSize:12)),
+        const SizedBox(height:4),
+        Text('Força: '+enemy.tier.toString()+
+          ' • Nível mínimo '+enemy.minLevel.toString(),
+          style:const TextStyle(color:Palette.gold,fontSize:12)),
+        if(enemy.boss)const Text('★ CHEFE',style:TextStyle(
+          color:Palette.paleGold,fontWeight:FontWeight.bold)),
+        if(defeatedBosses.contains(enemy.id))
+          const Text('✓ Vencido',style:TextStyle(color:Colors.green)),
+        if(enemy.arena)Text('Rivalidade '+rivalry.toString(),
+          style:const TextStyle(fontSize:11)),
+        const SizedBox(height:6),
         ElevatedButton(
-          onPressed: () => fight(name, image, difficulty),
-          child: const Text('COMBATER')),
+          onPressed:available&&!isFighting?()=>fight(enemy):null,
+          child:Text(available?'COMBATER':'BLOQUEADO')),
       ])),
     ]));
+  }
+
+  Widget contractsPanel() {
+    dailyResetIfNeeded();
+    return panel('Contratos diários',Column(children:[
+      const Text('Renovação a cada dia local. Conclua objetivos '
+        'para resgatar ouro e experiência.',
+        style:TextStyle(fontSize:11)),
+      const SizedBox(height:9),
+      ...dailyContracts.map((contract){
+        final progress=contracts[contract.id]??0;
+        final finished=claimedContracts.contains(contract.id);
+        return Padding(padding:const EdgeInsets.only(bottom:12),
+          child:Row(children:[
+            Expanded(child:Column(
+              crossAxisAlignment:CrossAxisAlignment.start,
+              children:[
+                Text(contract.title,style:const TextStyle(
+                  color:Palette.gold,fontWeight:FontWeight.bold)),
+                Text(contract.description,
+                  style:const TextStyle(fontSize:11)),
+                Text(progress.toString()+'/'+contract.target.toString()+
+                  ' • +'+contract.gold.toString()+' ouro',
+                  style:const TextStyle(fontSize:11)),
+              ])),
+            TextButton(
+              onPressed:finished||progress<contract.target?null:
+                 ()=>claimContract(contract),
+              child:Text(finished?'RESGATADO':'RESGATAR')),
+          ]),
+        );
+      }),
+    ]));
+  }
 
   Widget missionsPage() => ListView(
-    padding: const EdgeInsets.all(12),
-    children: [
-      panel('Expedições', const Text(
-        'Enfrente inimigos para ganhar ouro, experiência e itens. '
-        'Cada luta consome 1 energia.')),
-      opponent('Lobo da Floresta', 'enemy_wolf', 1,
-        'Predador à espreita nas estradas.'),
-      opponent('Pirata do Porto', 'enemy_pirate', 2,
-        'Saqueador das rotas comerciais.'),
-      opponent('Minotauro', 'enemy_minotaur', 4,
-        'Uma fera poderosa. Prepare-se!'),
-      panel('Taverna', Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Restaure vida e energia por 15 moedas.'),
-        const SizedBox(height: 8),
-        ElevatedButton.icon(
-          onPressed: rest,
-          icon: const Icon(Icons.hotel),
-          label: const Text('DESCANSAR • 15 OURO')),
+    padding:const EdgeInsets.all(12),
+    children:[
+      panel('Mapa das expedições',const Text(
+        'Enfrente inimigos, desbloqueie regiões derrotando chefes '
+        'e conquiste recompensas especiais. Cada luta custa 1 energia.')),
+      ...regions.entries.map((region)=>Column(
+        crossAxisAlignment:CrossAxisAlignment.start,children:[
+          panel(region.key,Column(
+            crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(region.value),
+            const SizedBox(height:10),
+            Sprite(
+              region.key=='Campânia'?'scene_forest':
+              region.key=='Porto de Óstia'?'scene_port':'scene_ruins',
+              width:300,height:110),
+          ])),
+          ...expeditions.where((e)=>e.region==region.key).map(opponent),
+        ])),
+      contractsPanel(),
+      panel('Taverna',Column(
+        crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('Restaure sua saúde e energia por 15 moedas. '
+          'Se estiver sem ouro, os médicos da arena oferecem '
+          'socorro gratuito para evitar que sua jornada trave.'),
+        const SizedBox(height:8),
+        ElevatedButton.icon(onPressed:rest,icon:const Icon(Icons.hotel),
+          label:const Text('DESCANSAR')),
       ])),
     ],
   );
 
-  Widget arenaPage() => ListView(
-    padding: const EdgeInsets.all(12),
-    children: [
-      panel('Arena Romana', const Text(
-        'Desafie rivais controlados pelo jogo e prove o seu valor.')),
-      opponent('Recruta da Arena', 'enemy_gladiator', 2,
-        'Adversário em início de carreira.'),
-      opponent('Veterano Pretoriano', 'enemy_gladiator', 3,
-        'Treinado nas legiões romanas.'),
-      opponent('Campeão do Coliseu', 'enemy_gladiator', 5,
-        'Desafio reservado aos mais fortes.'),
+  Widget arenaPage()=>ListView(
+    padding:const EdgeInsets.all(12),
+    children:[
+      panel('Rivais do Coliseu',const Text(
+        'Os adversários guardam memória das suas vitórias. '
+        'Cada revanche aumenta sua força e sua vida. '
+        'Enfrente-os para construir sua reputação.')),
+      ...arenaRivals.map(opponent),
+      panel('Cartaz de vitórias',Text('Você venceu '+wins.toString()+
+        ' lutas. Alcance 50 vitórias para se tornar '
+        'uma lenda das arenas.')),
     ],
   );
 
@@ -646,6 +629,11 @@ class _GameScreenState extends State<GameScreen> {
   Widget marketPage() => ListView(
     padding: const EdgeInsets.all(12),
     children: [
+      FilledButton.icon(
+        onPressed:()=>setState(()=>shopSection=1),
+        icon:const Icon(Icons.hardware),
+        label:const Text('VISITAR O FERREIRO')),
+      const SizedBox(height:12),
       panel('Mercador', Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Mercadorias com raridade e atributos variados.'),
@@ -658,6 +646,32 @@ class _GameScreenState extends State<GameScreen> {
         gear, 'Comprar • ' + gear.price.toString() + ' ouro',
         () => buy(gear))),
       if (shop.isEmpty) const Text('As mercadorias acabaram. Atualize a lista.'),
+    ],
+  );
+
+  Widget forgePage()=>ListView(
+    padding:const EdgeInsets.all(12),
+    children:[
+      Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+        onPressed:()=>setState(()=>shopSection=0),
+        icon:const Icon(Icons.arrow_back),
+        label:const Text('Voltar ao mercador'))),
+      panel('Oficina do ferreiro',const Text(
+        'Reforce armas, escudos, armaduras e acessórios '
+        'até +5. Cada etapa custa ouro e melhora os atributos.')),
+      panel('Equipados',Column(children:
+        equipped.values.map((gear)=>gearCard(
+          gear,'Reforjar +'+(gear.forgeRank+1).toString()+
+            ' • '+gear.forgeCost.toString()+' ouro',
+          ()=>forge(gear,fromEquipment:true),
+        )).toList())),
+      panel('Itens na bolsa',bag.isEmpty
+        ?const Text('Sua bolsa está vazia.')
+        :Column(children:bag.map((gear)=>gearCard(
+          gear,'Reforjar +'+(gear.forgeRank+1).toString()+
+          ' • '+gear.forgeCost.toString()+' ouro',
+          ()=>forge(gear,fromEquipment:false),
+        )).toList())),
     ],
   );
 
@@ -693,7 +707,7 @@ class _GameScreenState extends State<GameScreen> {
       ? const Center(child: CircularProgressIndicator())
       : IndexedStack(index: page, children: [
           heroPage(), missionsPage(), arenaPage(),
-          inventoryPage(), marketPage(),
+          inventoryPage(), shopSection==0?marketPage():forgePage(),
         ]),
     bottomNavigationBar: NavigationBar(
       height: 72,
@@ -705,7 +719,7 @@ class _GameScreenState extends State<GameScreen> {
         NavigationDestination(icon: Icon(Icons.map), label: 'Missões'),
         NavigationDestination(icon: Icon(Icons.shield), label: 'Arena'),
         NavigationDestination(icon: Icon(Icons.backpack), label: 'Itens'),
-        NavigationDestination(icon: Icon(Icons.storefront), label: 'Mercado'),
+        NavigationDestination(icon: Icon(Icons.storefront), label: 'Comércio'),
       ],
     ),
   );
