@@ -45,7 +45,7 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   static const saveKey = 'gladiatus_pixel_save_v2';
   final random = Random();
-  int page = 0, level = 1, experience = 0, gold = 300;
+  int page = 0, shopSection = 0, level = 1, experience = 0, gold = 300;
   int energy = 10, health = 100, wins = 0, points = 0;
   int strength = 5, dexterity = 5, agility = 5, constitution = 5;
   bool loading = true;
@@ -629,6 +629,11 @@ class _GameScreenState extends State<GameScreen> {
   Widget marketPage() => ListView(
     padding: const EdgeInsets.all(12),
     children: [
+      FilledButton.icon(
+        onPressed:()=>setState(()=>shopSection=1),
+        icon:const Icon(Icons.hardware),
+        label:const Text('VISITAR O FERREIRO')),
+      const SizedBox(height:12),
       panel('Mercador', Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Mercadorias com raridade e atributos variados.'),
@@ -647,6 +652,10 @@ class _GameScreenState extends State<GameScreen> {
   Widget forgePage()=>ListView(
     padding:const EdgeInsets.all(12),
     children:[
+      Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+        onPressed:()=>setState(()=>shopSection=0),
+        icon:const Icon(Icons.arrow_back),
+        label:const Text('Voltar ao mercador'))),
       panel('Oficina do ferreiro',const Text(
         'Reforce armas, escudos, armaduras e acessórios '
         'até +5. Cada etapa custa ouro e melhora os atributos.')),
@@ -698,7 +707,7 @@ class _GameScreenState extends State<GameScreen> {
       ? const Center(child: CircularProgressIndicator())
       : IndexedStack(index: page, children: [
           heroPage(), missionsPage(), arenaPage(),
-          inventoryPage(), marketPage(), forgePage(),
+          inventoryPage(), shopSection==0?marketPage():forgePage(),
         ]),
     bottomNavigationBar: NavigationBar(
       height: 72,
@@ -710,8 +719,7 @@ class _GameScreenState extends State<GameScreen> {
         NavigationDestination(icon: Icon(Icons.map), label: 'Missões'),
         NavigationDestination(icon: Icon(Icons.shield), label: 'Arena'),
         NavigationDestination(icon: Icon(Icons.backpack), label: 'Itens'),
-        NavigationDestination(icon: Icon(Icons.storefront), label: 'Mercado'),
-        NavigationDestination(icon: Icon(Icons.hardware), label: 'Forja'),
+        NavigationDestination(icon: Icon(Icons.storefront), label: 'Comércio'),
       ],
     ),
   );
