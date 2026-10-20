@@ -47,4 +47,25 @@ void main(){
     expect(expeditions.where((e)=>e.boss).length,3);
     expect(dailyContracts.length,4);
   });
+  test('empty accessory gains a useful property on forging',(){
+    const ring=Gear(
+      id:'blank_ring',name:'Anel sem atributo',slot:Slot.ring,
+      rarity:Rarity.common,level:1,price:10,
+    );
+    final forged=ring.reforged();
+    expect(forged.forgeRank,1);
+    expect(forged.strength,greaterThan(0));
+  });
+
+  test('all item slots can round trip from serialization',(){
+    for(final slot in Slot.values) {
+      final item=Gear(
+        id:slot.name,name:'Teste',slot:slot,rarity:Rarity.common,
+        level:1,price:10,
+      );
+      final restored=Gear.fromJson(item.toJson());
+      expect(restored.slot,slot);
+    }
+  });
+
 }
