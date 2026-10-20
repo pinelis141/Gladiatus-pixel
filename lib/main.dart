@@ -84,8 +84,8 @@ class Gear {
     return Gear(
       id: (j['id'] ?? '').toString(),
       name: (j['name'] ?? 'Item').toString(),
-      slot: Slot.values[n('slot').clamp(0, Slot.values.length - 1)],
-      rarity: Rarity.values[n('rarity').clamp(0, Rarity.values.length - 1)],
+      slot: Slot.values[n('slot').clamp(0, Slot.values.length - 1).toInt()],
+      rarity: Rarity.values[n('rarity').clamp(0, Rarity.values.length - 1).toInt()],
       level: max(1, n('level', 1)), price: max(1, n('price', 10)),
       minDamage: n('minDamage'), maxDamage: n('maxDamage'),
       armor: n('armor'), strength: n('strength'),
@@ -250,7 +250,7 @@ class _GameScreenState extends State<GameScreen> {
         level = max(1, n('level', 1));
         experience = max(0, n('experience', 0));
         gold = max(0, n('gold', 300));
-        energy = n('energy', 10).clamp(0, 10);
+        energy = n('energy', 10).clamp(0, 10).toInt();
         wins = max(0, n('wins', 0));
         points = max(0, n('points', 0));
         strength = max(1, n('strength', 5));
@@ -266,7 +266,7 @@ class _GameScreenState extends State<GameScreen> {
           ..clear()
           ..addAll((data['bag'] as List<dynamic>? ?? []).map((value) =>
             Gear.fromJson(Map<String, dynamic>.from(value as Map))));
-        health = n('health', maxHealth).clamp(0, maxHealth);
+        health = n('health', maxHealth).clamp(0, maxHealth).toInt();
         refreshShop();
       }
     } catch (_) {
