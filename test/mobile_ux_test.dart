@@ -12,13 +12,19 @@ void main(){
         SharedPreferences.setMockInitialValues({});
         await tester.binding.setSurfaceSize(Size(width,730));
         addTearDown(() async=>tester.binding.setSurfaceSize(null));
+        final previousError = FlutterError.onError;
+        FlutterError.onError = (details) {
+          debugPrint('UX AUDIT DIAGNOSTIC: ${details.toString()}');
+          previousError?.call(details);
+        };
+        addTearDown(() => FlutterError.onError = previousError);
         await tester.pumpWidget(const GladiatusApp());
         await tester.pumpAndSettle();
         expect(tester.takeException(),isNull);
-        await tester.tap(find.byIcon(Icons.map));
+        await tester.tap(find.descendant(of:find.byType(NavigationBar),matching:find.byIcon(Icons.map)));
         await tester.pumpAndSettle();
         expect(tester.takeException(),isNull);
-        await tester.tap(find.byIcon(Icons.storefront));
+        await tester.tap(find.descendant(of:find.byType(NavigationBar),matching:find.byIcon(Icons.storefront)));
         await tester.pumpAndSettle();
         expect(tester.takeException(),isNull);
     });
