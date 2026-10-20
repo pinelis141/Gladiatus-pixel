@@ -406,7 +406,7 @@ class _GameScreenState extends State<GameScreen> {
         checkLevelUp();
         final guarantee=enemy.id=='wolf' && wins==1;
         if(bag.length<40&&(guarantee || random.nextDouble()<
-            (firstBossWin?.85:.40))) {
+            (firstBossWin ? .85 : .40))) {
           final loot=guarantee?
               Gear(id:'first_upgrade',name:'Gládio do Recruta',
                 slot:Slot.weapon,rarity:Rarity.green,level:1,
@@ -698,125 +698,153 @@ class _GameScreenState extends State<GameScreen> {
   );
 
   Widget opponent(EnemySpec enemy){
-    final available=accessible(enemy);
+    final lock=lockReason(enemy);
     final rivalry=rivalVictories[enemy.id]??0;
+    final losses=rivalDefeats[enemy.id]??0;
     return panel(enemy.name,Row(children:[
-      Sprite(enemy.sprite,width:95,height:110),
+      Sprite(enemy.sprite,width:85,height:100),
       const SizedBox(width:10),
-      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-        children:[
-        Text(enemy.description,style:const TextStyle(fontSize:12)),
-        const SizedBox(height:4),
-        Text('Força: '+enemy.tier.toString()+
-          ' • Nível mínimo '+enemy.minLevel.toString(),
+      Expanded(child:Column(
+        crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(enemy.description,style:const TextStyle(fontSize:13)),
+        Text('Ameaça ${enemy.tier} · ${enemy.trait}',
           style:const TextStyle(color:Palette.gold,fontSize:12)),
-        if(enemy.boss)const Text('★ CHEFE',style:TextStyle(
-          color:Palette.paleGold,fontWeight:FontWeight.bold)),
+        if(enemy.boss)const Text('★ CHEFE — saque especial',
+          style:TextStyle(color:Palette.paleGold)),
+        if(enemy.arena)Text('Duelo: $rivalry vitórias · $losses derrotas',
+          style:const TextStyle(fontSize:12)),
         if(defeatedBosses.contains(enemy.id))
-          const Text('✓ Vencido',style:TextStyle(color:Colors.green)),
-        if(enemy.arena)Text('Rivalidade '+rivalry.toString(),
-          style:const TextStyle(fontSize:11)),
+          const Text('✓ Chefe vencido',
+            style:TextStyle(color:Colors.greenAccent)),
+        if(lock.isNotEmpty)Text('Bloqueado: $lock',
+          style:const TextStyle(color:Palette.paleGold,fontSize:12)),
         const SizedBox(height:6),
-        ElevatedButton(
-          onPressed:available&&!isFighting?()=>fight(enemy):null,
-          child:Text(available?'COMBATER':'BLOQUEADO')),
+        FilledButton.icon(
+          onPressed:lock.isEmpty&&!isFighting?()=>fight(enemy):null,
+          icon:const Icon(Icons.sports_martial_arts),
+          label:Text(lock.isEmpty?'ENFRENTAR':'BLOQUEADO')),
       ])),
     ]));
   }
 
-  Widget contractsPanel() {
-    return panel('Contratos diários',Column(children:[
-      const Text('Renovação a cada dia local. Conclua objetivos '
-        'para resgatar ouro e experiência.',
-        style:TextStyle(fontSize:11)),
-      const SizedBox(height:9),
-      ...dailyContracts.map((contract){
-        final progress=contracts[contract.id]??0;
-        final finished=claimedContracts.contains(contract.id);
-        return Padding(padding:const EdgeInsets.only(bottom:12),
-          child:Row(children:[
-            Expanded(child:Column(
-              crossAxisAlignment:CrossAxisAlignment.start,
-              children:[
-                Text(contract.title,style:const TextStyle(
-                  color:Palette.gold,fontWeight:FontWeight.bold)),
-                Text(contract.description,
-                  style:const TextStyle(fontSize:11)),
-                Text(progress.toString()+'/'+contract.target.toString()+
-                  ' • +'+contract.gold.toString()+' ouro',
-                  style:const TextStyle(fontSize:11)),
-              ])),
-            TextButton(
-              onPressed:finished||progress<contract.target?null:
-                 ()=>claimContract(contract),
-              child:Text(finished?'RESGATADO':'RESGATAR')),
-          ]),
-        );
-      }),
-    ]));
-  }
-
-  Widget missionsPage() => ListView(
-    padding:const EdgeInsets.all(12),
-    children:[
-      panel('Mapa das expedições',const Text(
-        'Enfrente inimigos, desbloqueie regiões derrotando chefes '
-        'e conquiste recompensas especiais. Cada luta custa 1 energia.')),
-      ...regions.entries.map((region)=>Column(
-        crossAxisAlignment:CrossAxisAlignment.start,children:[
-          panel(region.key,Column(
+  Widget contractsPanel()=>panel('Contratos diários',Column(children:[
+    const Text('Objetivos que rendem ouro e experiência.',
+      style:TextStyle(fontSize:13)),
+    const SizedBox(height:8),
+    ...dailyContracts.map((contract){
+      final progress=contracts[contract.id]??0;
+      final claimed=claimedContracts.contains(contract.id);
+      return Padding(padding:const EdgeInsets.symmetric(vertical:5),
+        child:Row(children:[
+          Expanded(child:Column(
             crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(region.value),
-            const SizedBox(height:10),
-            Sprite(
-              region.key=='Campânia'?'scene_forest':
-              region.key=='Porto de Óstia'?'scene_port':'scene_ruins',
-              width:300,height:110),
+            Text(contract.title,style:const TextStyle(
+              fontWeight:FontWeight.bold,color:Palette.paleGold)),
+            Text('${contract.description} $progress/${contract.target} '
+              '· +${contract.gold} ouro',
+              style:const TextStyle(fontSize:12)),
           ])),
-          ...expeditions.where((e)=>e.region==region.key).map(opponent),
-        ])),
-      contractsPanel(),
-      panel('Taverna',Column(
+          TextButton(
+            onPressed:claimed||progress<contract.target?null:
+              ()=>claimContract(contract),
+            child:Text(claimed?'FEITO':'RESGATAR')),
+        ]),
+      );
+    }),
+  ]));
+
+  Widget restPanel()=>panel('Taverna',Row(children:[
+    const Expanded(child:Text(
+      'Recupere saúde e energia. Custa 15 moedas; '
+      'socorro de emergência é gratuito.',
+      style:TextStyle(fontSize:13))),
+    const SizedBox(width:8),
+    OutlinedButton(onPressed:rest,child:const Text('DESCANSAR')),
+  ]));
+
+  Widget missionsPage()=>ListView(
+    padding:const EdgeInsets.all(12),children:[
+      panel('Próxima expedição',Column(
         crossAxisAlignment:CrossAxisAlignment.start,children:[
-        const Text('Restaure sua saúde e energia por 15 moedas. '
-          'Se estiver sem ouro, os médicos da arena oferecem '
-          'socorro gratuito para evitar que sua jornada trave.'),
+        const Text('Observe a ameaça, prepare seu gladiador e '
+          'enfrente novos desafios. Cada combate gasta 1 energia.'),
         const SizedBox(height:8),
-        ElevatedButton.icon(onPressed:rest,icon:const Icon(Icons.hotel),
-          label:const Text('DESCANSAR')),
+        FilledButton.icon(onPressed:()=>fight(expeditions.first),
+          icon:const Icon(Icons.swords),label:const Text('ENFRENTAR O LOBO')),
       ])),
+      restPanel(),
+      contractsPanel(),
+      if(defeatedBosses.contains('final_boss'))
+        panel('Lenda de Marte',const Text(
+          'Você conquistou o santuário de Vulcano. '
+          'Sua história já é contada nas arenas de Roma!')),
+      ...regions.entries.map((region)=>ExpansionTile(
+        initiallyExpanded:region.key=='Campânia',
+        title:Text(region.key,style:const TextStyle(
+          color:Palette.paleGold,fontWeight:FontWeight.bold)),
+        subtitle:Text(region.value,style:const TextStyle(fontSize:12)),
+        children:[
+          Padding(padding:const EdgeInsets.all(8),
+            child:LayoutBuilder(builder:(context,constraints)=>
+              Sprite(region.key=='Campânia'?'scene_forest':
+                region.key=='Porto de Óstia'?'scene_port':'scene_ruins',
+                width:constraints.maxWidth,height:120))),
+          ...expeditions.where((e)=>e.region==region.key).map(opponent),
+        ],
+      )),
     ],
   );
 
   Widget arenaPage()=>ListView(
-    padding:const EdgeInsets.all(12),
-    children:[
+    padding:const EdgeInsets.all(12),children:[
       panel('Rivais do Coliseu',const Text(
-        'Os adversários guardam memória das suas vitórias. '
-        'Cada revanche aumenta sua força e sua vida. '
-        'Enfrente-os para construir sua reputação.')),
+        'Os rivais lembram suas vitórias e derrotas, '
+        'mas nunca ficam impossíveis de vencer. '
+        'Prepare-se para cada estilo de luta.')),
       ...arenaRivals.map(opponent),
-      panel('Cartaz de vitórias',Text('Você venceu '+wins.toString()+
-        ' lutas. Alcance 50 vitórias para se tornar '
-        'uma lenda das arenas.')),
+      panel('Reputação',Column(children:[
+        Text('Vitórias totais: $wins / 50'),
+        if(wins>=50)const Text('★ TÍTULO: LENDA DA ARENA ★',
+          style:TextStyle(color:Palette.paleGold)),
+      ])),
     ],
   );
 
-  Widget inventoryPage() => ListView(
-    padding: const EdgeInsets.all(12),
-    children: [
-      panel('Inventário • ' + bag.length.toString() + '/40',
-        bag.isEmpty
-          ? const Text('Nenhum item. Explore ou visite o mercado.')
-          : Column(children: bag.map((gear) => gearCard(
-              gear, gear.level > level ? 'Nível insuficiente' : 'Equipar',
-              () => equip(gear),
-              secondary: () => sell(gear),
-              secondaryLabel: 'Vender +' +
-                (max(1, gear.price ~/ 2)).toString(),
-            )).toList())),
-    ],
-  );
+  Widget inventoryPage(){
+    final items=bag.where((g){
+      if(itemFilter=='Armas')return g.slot==Slot.weapon;
+      if(itemFilter=='Proteções')return [Slot.armor,Slot.helmet,
+        Slot.shield,Slot.gloves,Slot.boots].contains(g.slot);
+      if(itemFilter=='Acessórios')return [Slot.ring,Slot.amulet]
+        .contains(g.slot);
+      if(itemFilter=='Equipáveis')return g.level<=level;
+      return true;
+    }).toList()..sort((a,b)=>b.rarity.index.compareTo(a.rarity.index));
+    return ListView.builder(
+      padding:const EdgeInsets.all(12),
+      itemCount:items.length+1,
+      itemBuilder:(context,index){
+        if(index==0)return panel('Inventário · ${bag.length}/40',
+          Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Text('Compare cada item com seu equipamento antes de usar.',
+            style:TextStyle(fontSize:12)),
+          DropdownButton<String>(
+            value:itemFilter,isExpanded:true,
+            items:['Todos','Equipáveis','Armas','Proteções','Acessórios']
+              .map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),
+            onChanged:(v){if(v!=null)setState(()=>itemFilter=v);}),
+          if(items.isEmpty)const Text('Nenhum item nesta categoria. '
+            'Complete expedições ou visite o mercador.'),
+        ]));
+        final gear=items[index-1];
+        return gearCard(gear,gear.level>level?
+          'Exige nível ${gear.level}':'EQUIPAR',
+          gear.level>level?null:()=>equip(gear),
+          secondary:()=>unawaited(sellSafely(gear)),
+          secondaryLabel:'Vender +${max(1,gear.price~/2)} ouro');
+      },
+    );
+  }
 
   void rerollShop() {
     const fee = 25;
@@ -831,52 +859,60 @@ class _GameScreenState extends State<GameScreen> {
     unawaited(saveGame());
   }
 
-  Widget marketPage() => ListView(
-    padding: const EdgeInsets.all(12),
-    children: [
-      FilledButton.icon(
-        onPressed:()=>setState(()=>shopSection=1),
-        icon:const Icon(Icons.hardware),
-        label:const Text('VISITAR O FERREIRO')),
-      const SizedBox(height:12),
-      panel('Mercador', Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Mercadorias com raridade e atributos variados.'),
-        TextButton.icon(
-          icon: const Icon(Icons.refresh),
-          label: const Text('Renovar ofertas • 25 ouro'),
-          onPressed: gold >= 25 ? rerollShop : null),
+  Widget commerceTabs()=>Row(children:[
+    Expanded(child:FilledButton.tonal(
+      onPressed:()=>setState(()=>shopSection=0),
+      child:const Text('MERCADOR'))),
+    const SizedBox(width:8),
+    Expanded(child:FilledButton.tonal(
+      onPressed:()=>setState(()=>shopSection=1),
+      child:const Text('FERREIRO'))),
+  ]);
+
+  Widget marketPage()=>ListView(
+    padding:const EdgeInsets.all(12),children:[
+      commerceTabs(),
+      const SizedBox(height:10),
+      panel('Mercador',Column(
+        crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('Compare atributos antes da compra. '
+          'As ofertas permanecem disponíveis até serem renovadas.'),
+        const SizedBox(height:8),
+        OutlinedButton.icon(
+          icon:const Icon(Icons.refresh),
+          label:const Text('Renovar ofertas • 25 ouro'),
+          onPressed:gold>=25?rerollShop:null),
       ])),
-      ...shop.map((gear) => gearCard(
-        gear, 'Comprar • ' + gear.price.toString() + ' ouro',
-        () => buy(gear))),
-      if (shop.isEmpty) const Text('As mercadorias acabaram. Atualize a lista.'),
+      ...shop.map((g)=>gearCard(g,
+        'COMPRAR · ${g.price} ouro',
+        gold>=g.price&&bag.length<40?()=>buy(g):null)),
+      if(shop.isEmpty)const Text('Vitrine vazia. '
+        'Renove as ofertas para encontrar novos itens.'),
     ],
   );
 
   Widget forgePage()=>ListView(
-    padding:const EdgeInsets.all(12),
-    children:[
-      Align(alignment:Alignment.centerLeft,child:TextButton.icon(
-        onPressed:()=>setState(()=>shopSection=0),
-        icon:const Icon(Icons.arrow_back),
-        label:const Text('Voltar ao mercador'))),
+    padding:const EdgeInsets.all(12),children:[
+      commerceTabs(),
+      const SizedBox(height:10),
       panel('Oficina do ferreiro',const Text(
-        'Reforce armas, escudos, armaduras e acessórios '
-        'até +5. Cada etapa custa ouro e melhora os atributos.')),
-      panel('Equipados',Column(children:
-        equipped.values.map((gear)=>gearCard(
-          gear,'Reforjar +'+(gear.forgeRank+1).toString()+
-            ' • '+gear.forgeCost.toString()+' ouro',
-          ()=>forge(gear,fromEquipment:true),
-        )).toList())),
-      panel('Itens na bolsa',bag.isEmpty
-        ?const Text('Sua bolsa está vazia.')
-        :Column(children:bag.map((gear)=>gearCard(
-          gear,'Reforjar +'+(gear.forgeRank+1).toString()+
-          ' • '+gear.forgeCost.toString()+' ouro',
-          ()=>forge(gear,fromEquipment:false),
-        )).toList())),
+        'Melhore equipamentos até +5. Confira os atributos '
+        'atuais, o custo e a próxima melhoria antes de gastar.')),
+      panel('Equipamentos',Column(children:[
+        ...equipped.values.map((g)=>gearCard(g,
+          g.forgeRank>=5?'REFORJA MÁXIMA (+5)':
+          'REFORJAR +${g.forgeRank+1} · ${g.forgeCost} ouro',
+          g.forgeRank>=5||gold<g.forgeCost?null:
+            ()=>forge(g,fromEquipment:true))),
+      ])),
+      panel('Bolsa',Column(children:[
+        if(bag.isEmpty)const Text('Nenhum equipamento na bolsa.'),
+        ...bag.map((g)=>gearCard(g,
+          g.forgeRank>=5?'REFORJA MÁXIMA (+5)':
+          'REFORJAR +${g.forgeRank+1} · ${g.forgeCost} ouro',
+          g.forgeRank>=5||gold<g.forgeCost?null:
+            ()=>forge(g,fromEquipment:false))),
+      ])),
     ],
   );
 
