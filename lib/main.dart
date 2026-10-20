@@ -447,7 +447,7 @@ class _GameScreenState extends State<GameScreen> {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: Palette.panel,
-      border: Border.all(color: Palette.gold.withOpacity(.6)),
+      border: Border.all(color: Palette.gold.withValues(alpha: 0.6)),
       borderRadius: BorderRadius.circular(8),
     ),
     child: Column(
@@ -495,7 +495,7 @@ class _GameScreenState extends State<GameScreen> {
       padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: gear.color.withOpacity(.6)),
+        border: Border.all(color: gear.color.withValues(alpha: 0.6)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Image.asset(gear.icon, width: 52, height: 52,
