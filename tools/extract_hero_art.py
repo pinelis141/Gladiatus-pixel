@@ -39,11 +39,12 @@ def run() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     for index, name in enumerate(NAMES):
         sprite = atlas.crop((index * W, 0, (index + 1) * W, H))
-        # The gladius was exported left of the hero. Recenter its grip on
-        # the hero's visible hand, keeping the common canvas unchanged.
+        # The weapon layer includes its gripping hand. Align that hand with
+        # the base wrist; (20, 0) left a second hand below and to the right.
+        # Preserve the shared canvas so all other equipment stays aligned.
         if name == "equip_weapon_hd":
             aligned = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            aligned.paste(sprite, (20, 0))
+            aligned.paste(sprite, (12, -4))
             sprite = aligned
         # Crisp silhouettes, transparent voids and lossless PNG export.
         # The input is a small, lossy WEBP atlas to keep the GitHub repo lean.
