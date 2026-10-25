@@ -1,4 +1,4 @@
-# Gladiatus Pixel — RPG Romano (v2.1)
+# Gladiatus Pixel — RPG Romano (v2.2)
 
 RPG **independente** para Android feito em Flutter, com interface romana, batalha por turnos e pixel art em alta resolução (128×144). O projeto não contém código, marcas, servidores ou artes do Gladiatus original.
 
@@ -33,6 +33,26 @@ poderão ser atualizadas diretamente sem o certificado original. **Não
 desinstale uma versão com progresso salvo sem cópia de segurança.**
 A primeira instalação assinada com a nova chave estabelece uma identidade
 permanente para futuras atualizações.
+
+## v2.2 — Chefes, rivais e relíquias
+
+- **Três chefes em duas fases**: a partir de 50% da vida, cada chefe prepara uma
+  habilidade própria e a anuncia antes de executá-la. Guardião da Floresta
+  perfura parte da armadura, Almirante de Óstia rouba vigor e Colosso de Marte
+  provoca impacto que rompe parcialmente a defesa.
+- **Rivais adaptativos**: Cássio, Félix e Valério memorizam o movimento
+  dominante usado na última luta. Nos duelos seguintes, anunciam
+  contra-estratégias periódicas, sem escalada infinita de poder.
+- **Relíquias exclusivas**: Grevas do Guardião, Lâmina do Almirante e Coroa
+  de Marte, concedidas somente na primeira vitória sobre seus respectivos
+  chefes.
+- **Cofre de Recompensas**: prêmios exclusivos continuam salvos mesmo com os
+  40 espaços da bolsa ocupados; podem ser resgatados em Itens depois.
+- **Salvamentos preservados**: campos opcionais `rivalLastMove` e
+  `rewardVault` foram adicionados à chave existente
+  `gladiatus_pixel_save_v2`. Saves antigos iniciam os novos sistemas vazios.
+- Testes automatizados cobrem fases dos chefes, histórico de golpes,
+  relíquias, ausência de duplicação e bolsa cheia.
 
 ## Recursos implementados
 
