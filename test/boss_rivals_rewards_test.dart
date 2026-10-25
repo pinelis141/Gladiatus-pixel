@@ -54,7 +54,7 @@ void main(){
     battle.play(CombatMove.feint);
     battle.play(CombatMove.feint);
     battle.play(CombatMove.quick);
-    while(!battle.finished) battle.play(CombatMove.guard);
+    while(!battle.finished) battle.play(CombatMove.feint);
     expect(battle.outcome.dominantMove,CombatMove.feint);
   });
 
