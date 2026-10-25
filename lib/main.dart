@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/gear.dart';
 import 'systems/combat.dart';
 import 'systems/content.dart';
+import 'systems/boss_rewards.dart';
 import 'screens/battle_screen.dart';
 import 'widgets/roman_theme.dart';
 import 'widgets/pixel_avatar.dart';
@@ -57,6 +58,8 @@ class _GameScreenState extends State<GameScreen> {
   final List<Gear> shop = [];
   final Map<String,int> rivalVictories = {};
   final Map<String,int> rivalDefeats = {};
+  final Map<String,int> rivalLastMove = {};
+  final List<Gear> rewardVault = [];
   final Map<String,int> contracts = {};
   final Set<String> claimedContracts = {};
   final Set<String> defeatedBosses = {};
@@ -85,8 +88,8 @@ class _GameScreenState extends State<GameScreen> {
     page = 0; level = 1; experience = 0; gold = 300; energy = 10;
     wins = 0; points = 0;
     strength = 5; dexterity = 5; agility = 5; constitution = 5;
-    bag.clear(); equipped.clear();
-    rivalVictories.clear();rivalDefeats.clear(); contracts.clear();
+    bag.clear(); equipped.clear(); rewardVault.clear();
+    rivalVictories.clear();rivalDefeats.clear();rivalLastMove.clear(); contracts.clear();
     soundEnabled=true;vibrationEnabled=true;tutorialSeen=false;
     energyTimestamp=DateTime.now().millisecondsSinceEpoch;
     claimedContracts.clear(); defeatedBosses.clear();
@@ -133,6 +136,9 @@ class _GameScreenState extends State<GameScreen> {
         rivalDefeats..clear()..addAll(
           (data['rivalDefeats'] as Map<String,dynamic>? ?? {})
               .map((key,value)=>MapEntry(key,(value as num).toInt())));
+        rivalLastMove..clear()..addAll(
+          (data['rivalLastMove'] as Map<String,dynamic>? ?? {})
+              .map((key,value)=>MapEntry(key,(value as num).toInt())));
         soundEnabled=data['soundEnabled'] != false;
         vibrationEnabled=data['vibrationEnabled'] != false;
         tutorialSeen=data['tutorialSeen'] == true;
@@ -162,6 +168,10 @@ class _GameScreenState extends State<GameScreen> {
           ..clear()
           ..addAll((data['bag'] as List<dynamic>? ?? []).map((value) =>
             Gear.fromJson(Map<String, dynamic>.from(value as Map))));
+        rewardVault
+          ..clear()
+          ..addAll((data['rewardVault'] as List<dynamic>? ?? []).map(
+            (value)=>Gear.fromJson(Map<String,dynamic>.from(value as Map))));
         health = n('health', maxHealth).clamp(0, maxHealth).toInt();
         shop.clear();
         if (data['shop'] is List) {
@@ -205,12 +215,14 @@ class _GameScreenState extends State<GameScreen> {
       'strength': strength, 'dexterity': dexterity,
       'agility': agility, 'constitution': constitution,
       'rivalVictories': rivalVictories,'rivalDefeats':rivalDefeats,
+      'rivalLastMove': rivalLastMove,
       'soundEnabled':soundEnabled,'vibrationEnabled':vibrationEnabled,
       'tutorialSeen':tutorialSeen, 'contracts': contracts,
       'claimedContracts': claimedContracts.toList(),
       'defeatedBosses': defeatedBosses.toList(), 'contractDay': contractDay,
       'equipped': equipped.values.map((g) => g.toJson()).toList(),
       'bag': bag.map((g) => g.toJson()).toList(),
+      'rewardVault':rewardVault.map((g)=>g.toJson()).toList(),
       'shop': shop.map((g) => g.toJson()).toList(),
     });
     _saveQueue = _saveQueue.then((_) async {
@@ -410,6 +422,10 @@ class _GameScreenState extends State<GameScreen> {
           maxWeapon:weapon?.maxDamage??6,
           rivalRank:max(0,(rivalVictories[enemy.id]??0)-
             (rivalDefeats[enemy.id]??0)),
+          rivalRememberedMove: enemy.arena &&
+            rivalLastMove.containsKey(enemy.id)
+            ? CombatMove.values[rivalLastMove[enemy.id]!.clamp(0,
+                CombatMove.values.length-1)] : null,
           soundEnabled:soundEnabled,vibrationEnabled:vibrationEnabled,
         )),
       );
@@ -424,6 +440,7 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     String? drop;
+    bool rewardSentToVault=false;
     final firstBossWin=enemy.boss&&!defeatedBosses.contains(enemy.id);
     final reward=outcome.won ? 22+enemy.tier*13+
       (firstBossWin?110:0)+random.nextInt(15):0;
@@ -438,12 +455,23 @@ class _GameScreenState extends State<GameScreen> {
         if(enemy.arena) {
           rivalVictories[enemy.id]=(rivalVictories[enemy.id]??0)+1;
         }
-        if(enemy.boss)defeatedBosses.add(enemy.id);
+        if(enemy.boss) {
+          defeatedBosses.add(enemy.id);
+          if(firstBossWin && bossRewards.containsKey(enemy.id)) {
+            final special=bossRewards[enemy.id]!;
+            final granted=RewardVault.addUnique(item:special,
+              bag:bag,vault:rewardVault,equipped:equipped.values);
+            if(granted) {
+              drop=special.name;
+              rewardSentToVault=rewardVault.any((g)=>g.id==special.id);
+            }
+          }
+        }
         if(wins==1)tutorialSeen=true;
         checkLevelUp();
         final guarantee=enemy.id=='wolf' && wins==1;
-        if(bag.length<40&&(guarantee || random.nextDouble()<
-            (firstBossWin ? .85 : .40))) {
+        if(bag.length<40&&(guarantee || !firstBossWin &&
+            random.nextDouble()<.40)) {
           final loot=guarantee?
               Gear(id:'first_upgrade',name:'Gládio do Recruta',
                 slot:Slot.weapon,rarity:Rarity.green,level:1,
@@ -453,6 +481,9 @@ class _GameScreenState extends State<GameScreen> {
         }
       } else if(enemy.arena){
         rivalDefeats[enemy.id]=(rivalDefeats[enemy.id]??0)+1;
+      }
+      if(enemy.arena && outcome.dominantMove!=null) {
+        rivalLastMove[enemy.id]=outcome.dominantMove!.index;
       }
     });
     unawaited(saveGame());
@@ -466,6 +497,8 @@ class _GameScreenState extends State<GameScreen> {
         Text(outcome.won?'+'+reward.toString()+' ouro • +'+
           gainedXp.toString()+' XP':'Tente novamente.'),
         if(drop!=null)Text('Espólio: '+drop!),
+        if(rewardSentToVault)const Text(
+          'Bolsa cheia: relíquia guardada no Cofre de Recompensas.'),
         if(enemy.arena&&outcome.won)
           Text('Rivalidade '+(rivalVictories[enemy.id]??0).toString()),
         if(enemy.boss&&outcome.won)
@@ -474,6 +507,17 @@ class _GameScreenState extends State<GameScreen> {
       actions:[TextButton(onPressed:()=>Navigator.pop(context),
         child:const Text('CONTINUAR'))],
     ));
+  }
+
+  void claimReward(Gear gear){
+    final claimed=RewardVault.claim(item:gear,bag:bag,vault:rewardVault);
+    if(!claimed){
+      notice('Libere um espaço na bolsa para resgatar a relíquia.');
+      return;
+    }
+    setState(() {});
+    unawaited(saveGame());
+    notice('Relíquia resgatada: ${gear.name}.');
   }
 
   void forge(Gear gear,{required bool fromEquipment}){
@@ -497,6 +541,13 @@ class _GameScreenState extends State<GameScreen> {
     unawaited(saveGame());
     notice('Ferreiro concluiu o reforço +'+upgrade.forgeRank.toString()+'.');
   }
+
+  String moveLabel(CombatMove move)=>switch(move){
+    CombatMove.quick=>'Ataque',
+    CombatMove.heavy=>'Pesado',
+    CombatMove.guard=>'Defesa',
+    CombatMove.feint=>'Finta',
+  };
 
   String slotLabel(Slot s)=>switch(s){
     Slot.weapon=>'Arma', Slot.shield=>'Escudo',
@@ -760,6 +811,11 @@ class _GameScreenState extends State<GameScreen> {
           style:TextStyle(color:Palette.paleGold)),
         if(enemy.arena)Text('Duelo: $rivalry vitórias · $losses derrotas',
           style:const TextStyle(fontSize:12)),
+        if(enemy.arena && rivalLastMove.containsKey(enemy.id))
+          Text('Memória: seu golpe favorito foi ${moveLabel(
+            CombatMove.values[rivalLastMove[enemy.id]!.clamp(0,
+              CombatMove.values.length-1)])}.',
+            style:const TextStyle(fontSize:12,color:Palette.paleGold)),
         if(defeatedBosses.contains(enemy.id))
           const Text('✓ Chefe vencido',
             style:TextStyle(color:Colors.greenAccent)),
@@ -875,7 +931,19 @@ class _GameScreenState extends State<GameScreen> {
       padding:const EdgeInsets.all(12),
       itemCount:items.length+1,
       itemBuilder:(context,index){
-        if(index==0)return panel('Inventário · ${bag.length}/40',
+        if(index==0)return Column(children:[
+          if(rewardVault.isNotEmpty)panel('Cofre de Recompensas',Column(
+            crossAxisAlignment:CrossAxisAlignment.start,children:[
+            const Text('Relíquias garantidas aguardam espaço na bolsa.'),
+            ...rewardVault.map((g)=>ListTile(
+              title:Text(g.name),
+              subtitle:Text('${rarityLabel(g.rarity)} · ${slotLabel(g.slot)}'),
+              trailing:OutlinedButton(
+                onPressed:bag.length<40?()=>claimReward(g):null,
+                child:const Text('RESGATAR')),
+            )),
+          ])),
+          panel('Inventário · ${bag.length}/40',
           Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('Compare cada item com seu equipamento antes de usar.',
             style:TextStyle(fontSize:12)),
@@ -886,7 +954,7 @@ class _GameScreenState extends State<GameScreen> {
             onChanged:(v){if(v!=null)setState(()=>itemFilter=v);}),
           if(items.isEmpty)const Text('Nenhum item nesta categoria. '
             'Complete expedições ou visite o mercador.'),
-        ]));
+        ]))]);
         final gear=items[index-1];
         return gearCard(gear,gear.level>level?
           'Exige nível ${gear.level}':'EQUIPAR',

@@ -14,6 +14,7 @@ class BattleScreen extends StatefulWidget {
   final int startingHealth, maxHealth, playerLevel, power, accuracy;
   final int evasion, protection, minWeapon, maxWeapon, rivalRank;
   final bool soundEnabled, vibrationEnabled;
+  final CombatMove? rivalRememberedMove;
   const BattleScreen({
     super.key, required this.enemy,required this.equipment,
     required this.startingHealth,required this.maxHealth,
@@ -21,6 +22,7 @@ class BattleScreen extends StatefulWidget {
     required this.evasion,required this.protection,required this.minWeapon,
     required this.maxWeapon,this.rivalRank=0,
     this.soundEnabled=true,this.vibrationEnabled=true,
+    this.rivalRememberedMove,
   });
 
   @override
@@ -43,6 +45,7 @@ class _BattleScreenState extends State<BattleScreen> {
       power:widget.power,accuracy:widget.accuracy,evasion:widget.evasion,
       protection:widget.protection,minWeapon:widget.minWeapon,
       maxWeapon:widget.maxWeapon,rivalRank:widget.rivalRank,
+      rivalRememberedMove:widget.rivalRememberedMove,
     );
     if(widget.soundEnabled)unawaited(sfx.setVolume(.3));
   }
@@ -157,6 +160,27 @@ class _BattleScreenState extends State<BattleScreen> {
                       children:[
                       Text('${widget.enemy.trait} • ${widget.enemy.region}',
                         style:const TextStyle(fontSize:12)),
+                      if(widget.enemy.boss) Padding(
+                        padding:const EdgeInsets.only(top:8),
+                        child:Row(children:[
+                          Icon(engine.bossPhase==2?Icons.local_fire_department:
+                            Icons.flag,color:Palette.gold,size:19),
+                          const SizedBox(width:6),
+                          Expanded(child:Text(
+                            engine.bossPhase==2 ?
+                            'FASE 2: ${widget.enemy.name} desbloqueou ${engine.bossAbility}!'
+                            : 'FASE 1: o chefe ainda guarda seu golpe especial.',
+                            style:const TextStyle(color:Palette.paleGold,
+                              fontWeight:FontWeight.w600,fontSize:12))),
+                        ]),
+                      ),
+                      if(widget.enemy.arena && widget.rivalRememberedMove!=null)
+                        Padding(
+                          padding:const EdgeInsets.only(top:6),
+                          child:Text('RIVAL ADAPTADO: aprendeu com o último '
+                            'duelo e pode contrariar seu estilo dominante.',
+                            style:const TextStyle(color:Palette.paleGold,
+                              fontSize:12))),
                       const SizedBox(height:8),
                       Semantics(
                         label:'Próxima ação inimiga: ${engine.intentLabel}',
