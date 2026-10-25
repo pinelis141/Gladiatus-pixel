@@ -1,0 +1,144 @@
+name: Gladiatus Pixel 2.2 Preview APK
+
+on:
+  push:
+    branches: [main, feature/v22-preview-apk]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Verificar codigo antes do APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Gerar e validar todos os recursos
+        run: |
+          python -m pip install Pillow
+          python tools/generate_sprites.py
+          python tools/generate_hd_sprites.py
+          python tools/extract_hero_art.py
+          python tools/verify_hero_assets.py
+          python tools/generate_audio.py
+          python tools/pre_release_audit.py
+          python tools/audit_ui_contrast.py --strict
+          python -m unittest discover -s tests_py -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Preparar Flutter Android
+        run: |
+          flutter create --platforms=android --org com.roma.gladiatus --project-name gladiatus_pixel .
+          flutter pub get
+      - name: Analise estatica
+        run: flutter analyze --no-fatal-infos
+      - name: Testes completos
+        run: flutter test --reporter expanded
+
+  preview:
+    name: Compilar APK de testes isolado
+    needs: audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Gerar recursos aprovados
+        run: |
+          python -m pip install Pillow
+          python tools/generate_sprites.py
+          python tools/generate_hd_sprites.py
+          python tools/extract_hero_art.py
+          python tools/verify_hero_assets.py
+          python tools/generate_audio.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Preparar aplicativo de testes separado
+        run: |
+          flutter create --platforms=android --org com.roma.gladiatus --project-name gladiatus_pixel .
+          python tools/select_android_ndk.py
+          flutter pub get
+          python - <<'PY'
+          from pathlib import Path
+          gradle = Path("android/app/build.gradle.kts")
+          code = gradle.read_text()
+          old = 'applicationId = "com.roma.gladiatus.gladiatus_pixel"'
+          assert code.count(old) == 1, "ID de aplicativo inesperado"
+          gradle.write_text(code.replace(
+              old, 'applicationId = "com.roma.gladiatus.gladiatus_pixel.preview"'))
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text()
+          import re
+          assert re.search(r'android:label="[^"]+"', xml), "Label ausente"
+          manifest.write_text(re.sub(
+              r'android:label="[^"]+"',
+              'android:label="Gladiatus Preview"',
+              xml, count=1))
+          assert 'signingConfig = signingConfigs.getByName("debug")' in code, (
+              "O preview deve ser uma instalacao de testes, nao uma release"
+          )
+          print("Preview isolado: com.roma.gladiatus.gladiatus_pixel.preview")
+          PY
+      - name: Gerar APK v2.2 em modo release de testes
+        run: flutter build apk --release --no-tree-shake-icons
+      - name: Verificar pacote Android e assinatura de testes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, os, re, shutil, subprocess
+          apk=Path('build/app/outputs/flutter-apk/app-release.apk')
+          assert apk.is_file() and apk.stat().st_size > 1_000_000
+          sdk=Path(os.environ.get('ANDROID_SDK_ROOT') or
+                   os.environ.get('ANDROID_HOME') or
+                   '/usr/local/lib/android/sdk')
+          buildtools=sorted(
+              (p for p in (sdk/'build-tools').iterdir()
+               if (p/'aapt').exists() and (p/'apksigner').exists()),
+              key=lambda p:tuple(int(x) for x in re.findall(r'\d+',p.name)),
+              reverse=True)
+          assert buildtools,'Android build-tools indisponivel'
+          tools=buildtools[0]
+          info=subprocess.run([str(tools/'aapt'),'dump','badging',str(apk)],
+              check=True,capture_output=True,text=True)
+          assert "name='com.roma.gladiatus.gladiatus_pixel.preview'" in info.stdout, (
+              'O APK poderia substituir o jogo original!'
+          )
+          verification=subprocess.run(
+              [str(tools/'apksigner'),'verify','--print-certs',str(apk)],
+              check=True,capture_output=True,text=True)
+          assert 'Signer #1 certificate SHA-256 digest:' in verification.stdout
+          out=Path('dist')
+          out.mkdir(exist_ok=True)
+          destination=out/'Gladiatus-Pixel-2.2-PREVIEW.apk'
+          shutil.copy2(apk,destination)
+          digest=hashlib.sha256(destination.read_bytes()).hexdigest()
+          (out/'SHA256.txt').write_text(
+              f'{digest}  {destination.name}\n',encoding='ascii')
+          print('APK de teste assinado e validado')
+          print('SHA256:',digest)
+          print('Tamanho:',destination.stat().st_size)
+          PY
+      - name: Publicar APK de testes
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gladiatus-Pixel-2.2-PREVIEW-APK
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
